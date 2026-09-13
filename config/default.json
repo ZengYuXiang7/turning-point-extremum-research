@@ -1,0 +1,20 @@
+{
+  "seed": 2026,
+  "sample_seconds": 10,
+  "history_minutes": 240,
+  "history_steps": 1440,
+  "forecast_minutes": [15, 720, 1440, 2880],
+  "forecast_steps": [90, 4320, 8640, 17280],
+  "forecast_labels": ["ultra_15min", "short_12h", "short_1d", "mid_2d"],
+  "acc_targets_percent": {"15": 75.0, "1440": 60.0},
+  "window_stride_steps": 1,
+  "stride_rule": "one sample step per grain",
+  "models": ["PatchMLP", "DLinear"],
+  "scenarios": ["NoFutureWeather", "OracleFutureWeather"],
+  "losses": ["MSE", "DBLoss"],
+  "epochs": 100,
+  "patience": 10,
+  "strict_acc_min_power_kw": 100.0,
+  "strict_acc_tolerance": 0.3,
+  "patch_lengths_steps": [180, 120, 72, 36]
+}

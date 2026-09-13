@@ -1,0 +1,11 @@
+{
+  "backbone": "Qwen/Qwen2.5-1.5B",
+  "backbone_trainable": false,
+  "patch_length_steps": 60,
+  "patch_stride_steps": 30,
+  "history_tokens": 47,
+  "summary_tokens": 1,
+  "forecast_head_bottleneck": 512,
+  "gradient_checkpointing": true,
+  "future_weather_used": false
+}

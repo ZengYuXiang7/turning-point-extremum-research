@@ -1,0 +1,87 @@
+# ============================================================
+# Data: raw exports, processed datasets and presentation extracts
+# ============================================================
+preData/
+dataset/
+presentation_assets_*/
+models/pretrained/
+
+# Common tabular / array / archive data formats
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.arrow
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.mat
+*.xls
+*.xlsx
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+
+# ============================================================
+# Training artifacts and generated outputs
+# ============================================================
+.runs/
+checkpoints/
+visualizations/
+runs/
+wandb/
+lightning_logs/
+tensorboard/
+
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.pkl
+*.pickle
+*.joblib
+*.log
+*.pid
+
+# ============================================================
+# Python caches, virtual environments and local tooling
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+.venv/
+.uv-cache/
+venv/
+env/
+.env
+.env.*
+
+# local AI agent files
+AGENTS.md
+CLAUDE.md
+.agents/
+.claude/
+.codex/
+.cursor/
+
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
