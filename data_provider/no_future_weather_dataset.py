@@ -9,7 +9,7 @@ from data_provider.common import Repository, build_single_turbine_windows, make_
 
 
 class NoFutureWeatherDataset(Dataset):
-    """历史全特征到未来功率，不提供未来天气。"""
+    """预测起点之前的全部历史特征到未来功率。"""
 
     def __init__(self, repository: Repository, split: str, horizon: int) -> None:
         self.repository = repository
@@ -27,16 +27,12 @@ class NoFutureWeatherDataset(Dataset):
         target_end = target_start + self.horizon
         start_ns = int(series.times[target_start])
         past = np.ascontiguousarray(series.scaled[history_start:target_start])
-        weather = np.zeros(
-            (self.horizon, len(WEATHER_INDICES)), dtype=np.float32
-        )
         target = np.ascontiguousarray(
-            series.scaled[target_start:target_end, POWER_INDEX]
+            series.scaled[target_start:target_end, self.repository.power_index]
         )
 
         return (
             torch.from_numpy(past),
-            torch.from_numpy(weather),
             torch.from_numpy(target),
             torch.tensor(turbine_index, dtype=torch.long),
             torch.tensor(start_ns, dtype=torch.long),
@@ -44,9 +40,12 @@ class NoFutureWeatherDataset(Dataset):
 
 
 def make_no_future_weather_loaders(
-    horizon: int, batch_size: int, num_workers: int
+    horizon: int,
+    batch_size: int,
+    num_workers: int,
+    all_features: bool = False,
 ):
-    repository = Repository()
+    repository = Repository(all_features=all_features)
     train_dataset = NoFutureWeatherDataset(repository, "train", horizon)
     val_dataset = NoFutureWeatherDataset(repository, "val", horizon)
     test_dataset = NoFutureWeatherDataset(repository, "test", horizon)

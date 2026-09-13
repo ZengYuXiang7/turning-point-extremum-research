@@ -23,14 +23,14 @@ class OracleFutureWeatherDataset(Dataset):
     def __getitem__(self, index: int):
         turbine_index, history_start = self.windows[index]
         series = self.repository.series[turbine_index]
-        
+
         target_start = history_start + HISTORY_STEPS
         target_end = target_start + self.horizon
-        
+
         start_ns = int(series.times[target_start])
-        
+
         past = np.ascontiguousarray(series.scaled[history_start:target_start])
-        
+
         weather = np.ascontiguousarray(
             series.scaled[target_start:target_end, WEATHER_INDICES]
         )
@@ -51,9 +51,11 @@ def make_oracle_future_weather_loaders(
     horizon: int, batch_size: int, num_workers: int
 ):
     repository = Repository()
+    
     train_dataset = OracleFutureWeatherDataset(repository, "train", horizon)
     val_dataset = OracleFutureWeatherDataset(repository, "val", horizon)
     test_dataset = OracleFutureWeatherDataset(repository, "test", horizon)
+    
     datasets = {
         "train": train_dataset,
         "val": val_dataset,

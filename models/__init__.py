@@ -1,1 +1,1 @@
-"""Forecast backbones and common weather fusion."""
+"""按任务划分的风电预测模型。"""

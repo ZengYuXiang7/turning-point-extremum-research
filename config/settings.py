@@ -5,47 +5,44 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 SEED = 2026
-HISTORY_MINUTES = 240
-# 统一预测视界：15分钟 / 12小时 / 1天 / 2天
-HORIZON_MINUTES = (15, 720, 1440, 2880)
+HISTORY_STEPS = 16
+# 每个时间点为15分钟，对应15/30/45分钟和1/2/3/4/8/12/24小时。
+HORIZON_STEPS = (1, 2, 3, 4, 8, 12, 16, 32, 48, 96)
 # 业务 Acc 目标：超短期 75%，短期 60%；中期指标待定
 ACC_TARGET_PERCENT = {
-    15: 75.0,
-    1440: 60.0,
+    1: 75.0,
+    96: 60.0,
 }
 
-# 仅使用原生10秒数据
-GRAIN = "10s"
-SAMPLE_SECONDS = 10
-DATASET_ROOT = PROJECT_ROOT / "dataset" / "GuangningWindPower10s"
-STEPS_PER_MINUTE = 60 // SAMPLE_SECONDS
-HISTORY_STEPS = HISTORY_MINUTES * STEPS_PER_MINUTE
-# 每10秒移动一个采样点
+# 默认采样间隔；正式运行由 shell 传入 --sample-seconds 覆盖。
+SAMPLE_SECONDS = 15 * 60
+DATASET_ROOT = PROJECT_ROOT / "dataset" / "processed"
 WINDOW_STRIDE_STEPS = 1
+WINDOW_STRIDE_NS = WINDOW_STRIDE_STEPS * SAMPLE_SECONDS * 1_000_000_000
 EXPECTED_DELTA_NS = SAMPLE_SECONDS * 1_000_000_000
-# 池化约4分钟一块，即24个10秒点
-TEMPORAL_POOL_STEPS = 4 * STEPS_PER_MINUTE
+# 15分钟粒度下不再做时间池化。
+TEMPORAL_POOL_STEPS = 1
 HORIZONS = {
-    "ultra_15min": 15 * STEPS_PER_MINUTE,
-    "short_12h": 720 * STEPS_PER_MINUTE,
-    "short_1d": 1440 * STEPS_PER_MINUTE,
-    "mid_2d": 2880 * STEPS_PER_MINUTE,
+    "ultra_15min": 1,
+    "ultra_30min": 2,
+    "ultra_45min": 3,
+    "short_1h": 4,
+    "short_2h": 8,
+    "short_3h": 12,
+    "short_4h": 16,
+    "short_8h": 32,
+    "short_12h": 48,
+    "short_1d": 96,
 }
-PATCH_LENGTHS = [minutes * STEPS_PER_MINUTE for minutes in (30, 20, 12, 6)]
+PATCH_LENGTHS = [4, 4, 2, 2]
 
-# 训练、验证、测试目标时间严格不重叠；验证和测试各3天
-TRAIN_END = "2026-06-07T00:00:00"
-VALID_START = "2026-06-08T00:00:00"
-VALID_END = "2026-06-11T00:00:00"
-TEST_START = "2026-06-11T00:00:00"
-TEST_END = "2026-06-14T00:00:00"
+# 按时间顺序将样本划分为训练、验证、测试集
+SPLIT_RATIOS = (7, 1, 2)
 
 # 全历史特征；天气相关见 WEATHER_COLUMNS
 HISTORY_COLUMNS = [
-    "风机-P",
-    "风机-理论功率",
+    "风机-理论功率-计算",
     "风机-实时风速",
-    "风机-风速",
     "风机-实时风向_sin",
     "风机-实时风向_cos",
     "风机-环境温度",
@@ -62,12 +59,12 @@ HISTORY_COLUMNS = [
     "偏航系统-机舱位置_cos",
     "偏航系统-扭揽角度_sin",
     "偏航系统-扭揽角度_cos",
+    "风机-P",
 ]
 
 # 天气→P / Oracle：原始气象 + 舱温塔底温 + 对风姿态与扭缆
 WEATHER_COLUMNS = [
     "风机-实时风速",
-    "风机-风速",
     "风机-实时风向_sin",
     "风机-实时风向_cos",
     "风机-环境温度",
@@ -83,49 +80,35 @@ WEATHER_COLUMNS = [
 
 WEATHER_INDICES = [HISTORY_COLUMNS.index(name) for name in WEATHER_COLUMNS]
 POWER_INDEX = HISTORY_COLUMNS.index("风机-P")
-THEORY_INDEX = HISTORY_COLUMNS.index("风机-理论功率")
-CIRCULAR_INDICES = [4, 5, 14, 15, 16, 17, 18, 19]
-# 连续特征用训练集 StandardScaler；sin/cos 角特征保持原样
-CONTINUOUS_STANDARDIZE_INDICES = [0, 1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13]
+THEORY_INDEX = HISTORY_COLUMNS.index("风机-理论功率-计算")
+# 全部历史特征按每台风机的训练时段统计量进行 StandardScaler
 
 STRICT_ACC_MIN_POWER_KW = 100.0
 STRICT_ACC_TOLERANCE = 0.30
 
 
-def refresh_derived() -> None:
-    # 由 SAMPLE_SECONDS 重算步数相关常量；窗步长固定为 1 个采样点
-    global STEPS_PER_MINUTE
-    global HISTORY_STEPS
-    global WINDOW_STRIDE_STEPS
+def apply_sample_seconds(seconds: int) -> None:
+    # 切换采样间隔，并同步时间差与滑窗时间单位
+    global SAMPLE_SECONDS
+    global WINDOW_STRIDE_NS
     global EXPECTED_DELTA_NS
-    global TEMPORAL_POOL_STEPS
-    global HORIZONS
-    global PATCH_LENGTHS
 
-    STEPS_PER_MINUTE = 60 // SAMPLE_SECONDS
-    HISTORY_STEPS = HISTORY_MINUTES * STEPS_PER_MINUTE
-    WINDOW_STRIDE_STEPS = 1
+    SAMPLE_SECONDS = seconds
+    WINDOW_STRIDE_NS = WINDOW_STRIDE_STEPS * SAMPLE_SECONDS * 1_000_000_000
     EXPECTED_DELTA_NS = SAMPLE_SECONDS * 1_000_000_000
-    TEMPORAL_POOL_STEPS = 4 * STEPS_PER_MINUTE
-    HORIZONS = {
-        "ultra_15min": 15 * STEPS_PER_MINUTE,
-        "short_12h": 720 * STEPS_PER_MINUTE,
-        "short_1d": 1440 * STEPS_PER_MINUTE,
-        "mid_2d": 2880 * STEPS_PER_MINUTE,
-    }
-    PATCH_LENGTHS = [minutes * STEPS_PER_MINUTE for minutes in (30, 20, 12, 6)]
 
 
-def apply_history(minutes: int) -> None:
-    # 切换历史窗长度（分钟）；须在导入 data/model 之前调用
-    global HISTORY_MINUTES
+def apply_history_steps(steps: int) -> None:
+    # 切换历史窗口点数
+    global HISTORY_STEPS
 
-    HISTORY_MINUTES = minutes
-    refresh_derived()
+    HISTORY_STEPS = steps
 
 
-def apply_window_stride(steps: int) -> None:
-    """Set the prediction-origin spacing after refresh_derived has run."""
+def apply_window_stride_steps(steps: int) -> None:
+    # 切换预测起点间隔点数
     global WINDOW_STRIDE_STEPS
+    global WINDOW_STRIDE_NS
 
-    WINDOW_STRIDE_STEPS = int(steps)
+    WINDOW_STRIDE_STEPS = steps
+    WINDOW_STRIDE_NS = steps * SAMPLE_SECONDS * 1_000_000_000

@@ -12,12 +12,11 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from config.settings import (
-    GRAIN,
-    HISTORY_MINUTES,
+    HISTORY_COLUMNS,
     HISTORY_STEPS,
     PROJECT_ROOT,
     SAMPLE_SECONDS,
-    STEPS_PER_MINUTE,
+    WEATHER_COLUMNS,
 )
 from data_provider.forecast_weather_dataset import make_forecast_weather_loaders
 from data_provider.multi_turbine_relation_dataset import (
@@ -29,15 +28,132 @@ from data_provider.oracle_future_weather_dataset import make_oracle_future_weath
 from data_provider.predicted_future_weather_dataset import (
     make_predicted_future_weather_loaders,
 )
-from data_provider.weather_to_power_dataset import make_weather_to_power_loaders
-from models.forecast_model import ForecastModel
-from models.StockEcho_windpower import StockEchoWindPower
-from models.weather_forecast import WeatherForecastModel
-from models.weather_to_power import WeatherToPowerModel
+from models.backbone.stockecho import StockEchoNoFutureWeather, StockEchoWindPower
+from models.futureweather import FutureWeatherModel
+from models.noweather import NoFutureWeatherModel
+from models.weatherforecast import WeatherForecastModel
+from observability import (
+    CONTRACT_VERSION,
+    aggregate_test_metrics,
+    build_dataset_significance,
+    result_checkpoint_path,
+    result_record_path,
+    result_report_path,
+    write_result_record,
+    write_result_report,
+)
 from utils.acc30_loss import Acc30BoundaryLoss
 from utils.dbloss import DBLoss
 from utils.metrics import metric_bundle, save_metrics
 from utils.reproducibility import seed_everything
+
+
+def format_ns_date(timestamp_ns: int) -> str:
+    date = np.datetime_as_string(np.datetime64(timestamp_ns, "ns"), unit="D")
+    return f"{date[:4]}年{date[5:7]}月{date[8:10]}日"
+
+
+def print_data_summary(
+    datasets,
+    loaders,
+    horizon_steps,
+    window_stride_steps,
+    no_future_weather,
+    weather_task,
+    oracle,
+    predicted_weather,
+):
+    # 确定当前场景的输入与监督特征
+    past_features = datasets["train"].repository.feature_names
+    target_features = ["风机-P"]
+
+    if weather_task:
+        past_features = WEATHER_COLUMNS
+        target_features = WEATHER_COLUMNS
+        weather_source = "模型不使用，仅保留天气预测任务的统一接口"
+    elif oracle:
+        weather_source = "真实未来天气"
+    elif predicted_weather:
+        weather_source = "程序1预测的未来天气"
+
+    print("\n========== 数据集与 Batch 输入 ==========")
+    print(f"past 特征（{len(past_features)} 个）：")
+    for feature_index, feature_name in enumerate(past_features, start=1):
+        print(f"  {feature_index:02d}. {feature_name}")
+
+    if no_future_weather:
+        print("NoFutureWeather：不构造未来天气输入。")
+    else:
+        print(f"future_weather 特征（{len(WEATHER_COLUMNS)} 个，{weather_source}）：")
+        for feature_index, feature_name in enumerate(WEATHER_COLUMNS, start=1):
+            print(f"  {feature_index:02d}. {feature_name}")
+
+    print(f"target 特征（{len(target_features)} 个）：{', '.join(target_features)}")
+    print("turbine_id：从 0 开始的风机索引；单机样本为标量，多机面板样本为 16 个索引")
+    history_minutes = HISTORY_STEPS * SAMPLE_SECONDS / 60
+    horizon_minutes = horizon_steps * SAMPLE_SECONDS / 60
+    window_stride_minutes = window_stride_steps * SAMPLE_SECONDS / 60
+    sample_minutes = SAMPLE_SECONDS / 60
+    print(
+        f"历史长度={history_minutes:g}分钟 预测长度={horizon_minutes:g}分钟 "
+        f"滑窗步长={window_stride_minutes:g}分钟\n"
+    )
+    print("各切分的预测目标覆盖范围、样本占比和 Batch 张量形状：")
+
+    total_windows = sum(len(datasets[split]) for split in ("train", "val", "test"))
+    target_span_ns = (horizon_steps - 1) * SAMPLE_SECONDS * 1_000_000_000
+    total_coverage_ns = 0
+
+    for split in ("train", "val", "test"):
+        dataset = datasets[split]
+        first_target_start_ns = int(dataset[0][-1].item())
+        last_target_end_ns = int(dataset[-1][-1].item()) + target_span_ns
+        total_coverage_ns += last_target_end_ns - first_target_start_ns
+
+    for split in ("train", "val", "test"):
+        dataset = datasets[split]
+        loader = loaders[split]
+        first_sample = dataset[0]
+        last_sample = dataset[-1]
+        target_start_ns = int(first_sample[-1].item())
+        target_end_ns = int(last_sample[-1].item()) + target_span_ns
+        coverage_days = (target_end_ns - target_start_ns) / 86_400_000_000_000
+        time_ratio = 100.0 * (target_end_ns - target_start_ns) / total_coverage_ns
+        window_ratio = 100.0 * len(dataset) / total_windows
+        batch_items = []
+
+        for sample_index in range(loader.batch_size):
+            batch_items.append(dataset[sample_index])
+
+        batch = loader.collate_fn(batch_items)
+        print(
+            f"  {split:<5}  目标时间={format_ns_date(target_start_ns)} 至 "
+            f"{format_ns_date(target_end_ns)}（约 {coverage_days:.1f} 天）  "
+            f"时间占比={time_ratio:.2f}%  窗口={len(dataset):,}（{window_ratio:.2f}%）  "
+            f"batches={len(loader):,}"
+        )
+
+        if no_future_weather:
+            past, target, turbine_id, target_start = batch
+            print(
+                f"    输入  past shape={list(past.shape)}  "
+                f"turbine_id shape={list(turbine_id.shape)}"
+            )
+        else:
+            past, future_weather, target, turbine_id, target_start = batch
+            print(
+                f"    输入  past shape={list(past.shape)}  "
+                f"future_weather shape={list(future_weather.shape)}  "
+                f"turbine_id shape={list(turbine_id.shape)}"
+            )
+
+        print(
+            f"    标签  target shape={list(target.shape)}  "
+            f"时间维={horizon_steps}点（每点{sample_minutes:g}分钟）  "
+            f"target_start_ns shape={list(target_start.shape)}",
+            flush=True,
+        )
+        print('')
 
 
 def run_epoch(
@@ -46,11 +162,14 @@ def run_epoch(
     device,
     optimizer,
     objective,
+    dbloss_weight,
     train,
     power_means,
     power_stds,
     show_progress,
     epoch,
+    no_future_weather,
+    model_uses_future_weather,
     weather_task,
 ):
     # 单个 epoch 的前向与可选反传；bf16 AMP，clip_norm=1.0
@@ -77,11 +196,19 @@ def run_epoch(
     )
 
     with context:
-        for past, weather, target, turbine_id, _ in batches:
+        for batch in batches:
+            if no_future_weather:
+                past, target, turbine_id, _ = batch
+            else:
+                past, future_weather, target, turbine_id, _ = batch
+
             past = past.to(device, non_blocking=True)
-            weather = weather.to(device, non_blocking=True)
             target = target.to(device, non_blocking=True)
             turbine_id = turbine_id.to(device, non_blocking=True)
+
+            if model_uses_future_weather:
+                future_weather = future_weather.to(device, non_blocking=True)
+
             batch_mean = power_means[turbine_id].unsqueeze(-1)
             batch_std = power_stds[turbine_id].unsqueeze(-1)
 
@@ -93,7 +220,11 @@ def run_epoch(
                 dtype=torch.bfloat16,
                 enabled=device.type == "cuda",
             ):
-                prediction = model(past, weather, turbine_id)
+                if model_uses_future_weather:
+                    prediction = model(past, future_weather, turbine_id)
+                else:
+                    prediction = model(past, turbine_id)
+
                 mse = torch.mean((prediction - target) ** 2)
 
                 if objective is None:
@@ -101,10 +232,8 @@ def run_epoch(
                 elif isinstance(objective, Acc30BoundaryLoss):
                     loss = objective(prediction, target, batch_mean, batch_std)
                 else:
-                    loss = objective(
-                        prediction.reshape(-1, prediction.shape[-1]),
-                        target.reshape(-1, target.shape[-1]),
-                    )
+                    power_dbloss = objective(prediction, target)
+                    loss = mse + dbloss_weight * power_dbloss
 
             if train:
                 loss.backward()
@@ -128,6 +257,7 @@ def run_epoch(
                     strict_valid += int(valid.sum().item())
                     strict_passed += int(passed.sum().item())
 
+            # 验证仅保留点误差指标。
             batches.set_postfix(
                 loss=total_loss / points,
                 mse=total_mse / points,
@@ -138,10 +268,19 @@ def run_epoch(
         strict_acc30 = 0.0
     else:
         strict_acc30 = 100.0 * strict_passed / strict_valid
+
     return total_loss / points, total_mse / points, strict_acc30
 
 
-def dump_weather_forecasts(model, datasets, batch_size, device, run_dir, show_progress):
+def dump_weather_forecasts(
+    model,
+    datasets,
+    batch_size,
+    num_workers,
+    device,
+    run_dir,
+    show_progress,
+):
     # 程序1：按窗口写出 train/val/test 未来气象，供程序2读取
     model.eval()
     for split in ("train", "val", "test"):
@@ -149,7 +288,7 @@ def dump_weather_forecasts(model, datasets, batch_size, device, run_dir, show_pr
             datasets[split],
             batch_size=batch_size,
             shuffle=False,
-            num_workers=0,
+            num_workers=num_workers,
             pin_memory=True,
             drop_last=False,
         )
@@ -203,38 +342,159 @@ def dump_weather_forecasts(model, datasets, batch_size, device, run_dir, show_pr
         )
 
 
+def write_power_result_contract(
+    args,
+    repository,
+    datasets,
+    checkpoint,
+    best_epoch,
+    best_mse,
+    history,
+    curve_overall,
+):
+    # 将单 seed 最优模型与测试指标写入正式实验契约。
+    test_metrics = {
+        "Acc30": curve_overall["strict_acc30"],
+        "MAE": curve_overall["mae_kw"],
+        "MSE": curve_overall["mse_kw2"],
+        "RMSE": curve_overall["rmse_kw"],
+        "MAPE": curve_overall["mape"],
+    }
+    round_record = {
+        "seed": args.seed,
+        "best_epoch": best_epoch,
+        "best_valid": {"MSE_scaled": best_mse},
+        "test_metrics": test_metrics,
+        "checkpoint": checkpoint.as_posix(),
+        "early_stop": {
+            "patience": args.patience,
+            "completed_epochs": len(history),
+        },
+    }
+    rounds = [round_record]
+    mean_std = aggregate_test_metrics(rounds)
+
+    available_samples = 0
+    for dataset in datasets.values():
+        available_samples += len(dataset)
+
+    condition = {
+        "domain": "wind_power_forecasting",
+        "scenario": args.scenario,
+        "sample_seconds": args.sample_seconds,
+        "history_steps": args.history_steps,
+        "horizon_steps": args.horizon_steps,
+        "window_stride_steps": args.window_stride_steps,
+        "loss": args.loss,
+        "dbloss_weight": args.dbloss_weight,
+    }
+
+    if args.model == "PatchMLPAllFeatures":
+        feature_fusion = "cross_variable_mlp"
+        moving_average_kernel = 13
+        temporal_projection = "multi_scale_patch_mlp"
+        purpose = "全部有效历史特征的PatchMLP功率预测"
+    else:
+        feature_fusion = "learned_linear_projection"
+        moving_average_kernel = 25
+        temporal_projection = "shared_across_channels"
+        purpose = "全部有效历史特征的DLinear功率预测"
+
+    model_config = {
+        "input_features": len(repository.feature_names),
+        "feature_fusion": feature_fusion,
+        "moving_average_kernel": moving_average_kernel,
+        "temporal_projection": temporal_projection,
+        "turbine_embedding": True,
+        "revin": True,
+    }
+    train_config = {
+        "seed": args.seed,
+        "epochs": args.epochs,
+        "patience": args.patience,
+        "batch_size": args.batch_size,
+        "learning_rate": args.learning_rate,
+        "num_workers": args.num_workers,
+        "loss": args.loss,
+        "dbloss_weight": args.dbloss_weight,
+        "selection_metric": "validation_mse_scaled",
+    }
+    data_config = {
+        "source": "dataset/processed/turbine_01.npy ... turbine_16.npy",
+        "available_samples": available_samples,
+        "split": "chronological_70_10_20",
+        "split_seeds": "none",
+        "train_samples": len(datasets["train"]),
+        "valid_samples": len(datasets["val"]),
+        "test_samples": len(datasets["test"]),
+        "features": ", ".join(repository.feature_names),
+        "feature_normalization": "per_turbine_train_standard_scaler_then_window_revin",
+        "target": "风机-P",
+        "target_transform": "per_turbine_train_standard_scaler",
+    }
+    result = {
+        "contract_version": CONTRACT_VERSION,
+        "dataset": args.dataset_name,
+        "result_name": args.result_name,
+        "model_name": args.model,
+        "purpose": purpose,
+        "condition": condition,
+        "model_config": model_config,
+        "train_config": train_config,
+        "data_config": data_config,
+        "mean_std": mean_std,
+        "significance": [],
+        "rounds": rounds,
+    }
+    result["significance"] = build_dataset_significance(
+        args.dataset_name,
+        args.result_name,
+        result,
+    )
+
+    report_path = result_report_path(args.dataset_name, args.result_name)
+    record_path = result_record_path(args.dataset_name, args.result_name)
+    write_result_report(report_path, result)
+    write_result_record(record_path, result)
+    return report_path, record_path
+
+
 def train_and_test(args) -> dict:
     seed_everything(args.seed)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    no_future_weather = args.scenario == "NoFutureWeather"
     weather_task = args.scenario == "ForecastWeather"
-    weather_to_power = args.scenario == "WeatherToPower"
     predicted_weather = args.scenario == "PredictedFutureWeather"
     oracle = args.scenario == "OracleFutureWeather"
     joint_panel = args.model == "StockEcho"
     qwen_mlp = args.model == "QwenMLP"
     timer_weather_mlp = args.model == "TimerWeatherMLP"
+    all_features = args.model in ("DLinearAllFeatures", "PatchMLPAllFeatures")
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.set_float32_matmul_precision("high")
 
-    horizon_steps = args.horizon * STEPS_PER_MINUTE
+    horizon_steps = args.horizon_steps
 
-    if weather_to_power:
-        # 同时刻天气→功率；无历史窗/视界
-        horizon_steps = 1
-        repository, datasets, loaders = make_weather_to_power_loaders(
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
-        )
-        model = WeatherToPowerModel().to(device)
-    elif weather_task:
+    if weather_task:
         repository, datasets, loaders = make_forecast_weather_loaders(
             horizon=horizon_steps,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
         )
+        print_data_summary(
+            datasets,
+            loaders,
+            horizon_steps,
+            args.window_stride_steps,
+            no_future_weather,
+            weather_task,
+            oracle,
+            predicted_weather,
+        )
         model = WeatherForecastModel(args.model, horizon_steps).to(device)
+        model_uses_future_weather = True
     elif predicted_weather:
         # 程序2：天气来自程序1的 npy
         repository, datasets, loaders = make_predicted_future_weather_loaders(
@@ -243,8 +503,18 @@ def train_and_test(args) -> dict:
             num_workers=args.num_workers,
             weather_forecast_dir=args.weather_forecast_dir,
         )
+        print_data_summary(
+            datasets,
+            loaders,
+            horizon_steps,
+            args.window_stride_steps,
+            no_future_weather,
+            weather_task,
+            oracle,
+            predicted_weather,
+        )
         if timer_weather_mlp:
-            from models.TimerWeatherMLP import TimerWeatherMLP
+            from models.backbone.timer import TimerWeatherMLP
 
             model = TimerWeatherMLP(
                 horizon=horizon_steps,
@@ -256,7 +526,8 @@ def train_and_test(args) -> dict:
                 residual_forecast=bool(args.timer_residual_forecast),
             ).to(device)
         else:
-            model = ForecastModel(args.model, horizon_steps).to(device)
+            model = FutureWeatherModel(args.model, horizon_steps).to(device)
+        model_uses_future_weather = True
     elif joint_panel:
         if oracle:
             repository, datasets, loaders = (
@@ -266,6 +537,8 @@ def train_and_test(args) -> dict:
                     num_workers=args.num_workers,
                 )
             )
+            model = StockEchoWindPower(horizon_steps).to(device)
+            model_uses_future_weather = True
         else:
             repository, datasets, loaders = (
                 make_multi_turbine_no_future_weather_loaders(
@@ -274,7 +547,18 @@ def train_and_test(args) -> dict:
                     num_workers=args.num_workers,
                 )
             )
-        model = StockEchoWindPower(horizon_steps).to(device)
+            model = StockEchoNoFutureWeather(horizon_steps).to(device)
+            model_uses_future_weather = False
+        print_data_summary(
+            datasets,
+            loaders,
+            horizon_steps,
+            args.window_stride_steps,
+            no_future_weather,
+            weather_task,
+            oracle,
+            predicted_weather,
+        )
     else:
         if oracle:
             repository, datasets, loaders = make_oracle_future_weather_loaders(
@@ -287,9 +571,20 @@ def train_and_test(args) -> dict:
                 horizon=horizon_steps,
                 batch_size=args.batch_size,
                 num_workers=args.num_workers,
+                all_features=all_features,
             )
+        print_data_summary(
+            datasets,
+            loaders,
+            horizon_steps,
+            args.window_stride_steps,
+            no_future_weather,
+            weather_task,
+            oracle,
+            predicted_weather,
+        )
         if qwen_mlp:
-            from models.QwenMLP import QwenMLP
+            from models.backbone.qwen import QwenMLP
 
             model = QwenMLP(
                 horizon=horizon_steps,
@@ -299,12 +594,13 @@ def train_and_test(args) -> dict:
                 bottleneck=args.llm_bottleneck,
                 gradient_checkpointing=bool(args.llm_gradient_checkpointing),
             ).to(device)
+            model_uses_future_weather = False
         elif timer_weather_mlp:
             if not (oracle or predicted_weather):
                 raise ValueError(
                     "TimerWeatherMLP requires OracleFutureWeather or PredictedFutureWeather"
                 )
-            from models.TimerWeatherMLP import TimerWeatherMLP
+            from models.backbone.timer import TimerWeatherMLP
 
             model = TimerWeatherMLP(
                 horizon=horizon_steps,
@@ -315,30 +611,18 @@ def train_and_test(args) -> dict:
                 gradient_checkpointing=bool(args.timer_gradient_checkpointing),
                 residual_forecast=bool(args.timer_residual_forecast),
             ).to(device)
+            model_uses_future_weather = True
+        elif no_future_weather:
+            model = NoFutureWeatherModel(
+                args.model,
+                horizon_steps,
+                len(repository.feature_names),
+                repository.power_index,
+            ).to(device)
+            model_uses_future_weather = False
         else:
-            model = ForecastModel(args.model, horizon_steps).to(device)
-
-    for split in ("train", "val", "test"):
-        past, weather, target, turbine_id, target_start_ns = datasets[split][0]
-        print(
-            json.dumps(
-                {
-                    "event": "data_summary",
-                    "split": split,
-                    "windows": len(datasets[split]),
-                    "batches": len(loaders[split]),
-                    "past_shape": list(past.shape),
-                    "weather_shape": list(weather.shape),
-                    "target_shape": list(target.shape),
-                    "turbine_id_shape": list(turbine_id.shape),
-                    "batch_past_shape": [args.batch_size] + list(past.shape),
-                    "batch_weather_shape": [args.batch_size] + list(weather.shape),
-                    "batch_target_shape": [args.batch_size] + list(target.shape),
-                },
-                ensure_ascii=False,
-            ),
-            flush=True,
-        )
+            model = FutureWeatherModel(args.model, horizon_steps).to(device)
+            model_uses_future_weather = True
 
     logging.getLogger("torch.fx.experimental.symbolic_shapes").setLevel(logging.ERROR)
     if not (qwen_mlp or timer_weather_mlp):
@@ -362,8 +646,7 @@ def train_and_test(args) -> dict:
         )
     else:
         optimizer = torch.optim.Adam(trainable_parameters, lr=args.learning_rate)
-    # WeatherToPower 侧重 Acc30：训练仍可用 MSE，早停/选模/调 LR 盯 val Acc30
-    select_acc30 = args.loss == "MSEAcc30" or weather_to_power
+    select_acc30 = args.loss == "MSEAcc30"
     if select_acc30:
         scheduler_mode = "max"
         selection_metric = "validation_strict_acc30"
@@ -386,25 +669,28 @@ def train_and_test(args) -> dict:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     config = vars(args).copy()
-    config["grain"] = GRAIN
     config["sample_seconds"] = SAMPLE_SECONDS
-    config["history_minutes"] = HISTORY_MINUTES
     config["history_steps"] = HISTORY_STEPS
-    config["horizon_minutes"] = args.horizon
     config["horizon_steps"] = horizon_steps
     config["oracle_future_weather"] = oracle
     config["weather_task"] = weather_task
-    config["weather_to_power"] = weather_to_power
     config["predicted_future_weather"] = predicted_weather
     config["selection_metric"] = selection_metric
     config["acc30_loss_weight"] = 0.3 if args.loss == "MSEAcc30" else None
     config["acc30_loss_temperature"] = 0.03 if args.loss == "MSEAcc30" else None
-    sample_past, sample_weather, sample_target, _, _ = datasets["train"][0]
+    train_sample = datasets["train"][0]
+    if no_future_weather:
+        sample_past, sample_target, _, _ = train_sample
+    else:
+        sample_past, sample_weather, sample_target, _, _ = train_sample
+        config["weather_shape"] = list(sample_weather.shape)
+
     config["train_windows"] = len(datasets["train"])
     config["val_windows"] = len(datasets["val"])
     config["test_windows"] = len(datasets["test"])
+    config["feature_names"] = repository.feature_names
+    config["input_feature_count"] = len(repository.feature_names)
     config["past_shape"] = list(sample_past.shape)
-    config["weather_shape"] = list(sample_weather.shape)
     config["target_shape"] = list(sample_target.shape)
     config["parameter_count"] = int(sum(p.numel() for p in model.parameters()))
     config["trainable_parameter_count"] = int(
@@ -461,6 +747,10 @@ def train_and_test(args) -> dict:
     wait = 0
     history = []
     checkpoint = run_dir / "best_checkpoint.pt"
+    contract_checkpoint = checkpoint
+    if args.result_name:
+        contract_checkpoint = result_checkpoint_path(args.dataset_name, args.result_name, 1)
+        contract_checkpoint.parent.mkdir(parents=True, exist_ok=True)
 
     for epoch in range(1, args.epochs + 1):
         started = time.time()
@@ -470,11 +760,14 @@ def train_and_test(args) -> dict:
             device,
             optimizer,
             objective,
+            args.dbloss_weight,
             True,
             power_means,
             power_stds,
             args.show_progress,
             epoch,
+            no_future_weather,
+            model_uses_future_weather,
             weather_task,
         )
         _, val_mse, val_acc30 = run_epoch(
@@ -483,11 +776,14 @@ def train_and_test(args) -> dict:
             device,
             optimizer,
             objective,
+            args.dbloss_weight,
             False,
             power_means,
             power_stds,
             args.show_progress,
             epoch,
+            no_future_weather,
+            model_uses_future_weather,
             weather_task,
         )
 
@@ -506,13 +802,17 @@ def train_and_test(args) -> dict:
                 "seconds": round(time.time() - started, 2),
             }
             history.append(record)
-            print(
-                f"[ForecastWeather] epoch {epoch}/{args.epochs}  "
-                f"train_mse={train_mse:.6f}  val_mse={val_mse:.6f}  "
-                f"lr={optimizer.param_groups[0]['lr']:.1e}  "
-                f"{record['seconds']:.1f}s",
-                flush=True,
-            )
+            log_epoch = epoch == 1 or epoch % 10 == 0
+            if epoch == args.epochs:
+                log_epoch = True
+            if log_epoch:
+                print(
+                    f"[ForecastWeather] epoch {epoch}/{args.epochs}  "
+                    f"train_mse={train_mse:.6f}  val_mse={val_mse:.6f}  "
+                    f"lr={optimizer.param_groups[0]['lr']:.1e}  "
+                    f"{record['seconds']:.1f}s",
+                    flush=True,
+                )
         else:
             record = {
                 "task": "Power",
@@ -525,14 +825,18 @@ def train_and_test(args) -> dict:
                 "seconds": round(time.time() - started, 2),
             }
             history.append(record)
-            print(
-                f"[Power] epoch {epoch}/{args.epochs}  "
-                f"train_mse={train_mse:.6f}  train_acc30={train_acc30:.2f}%  "
-                f"val_mse={val_mse:.6f}  val_acc30={val_acc30:.2f}%  "
-                f"lr={optimizer.param_groups[0]['lr']:.1e}  "
-                f"{record['seconds']:.1f}s",
-                flush=True,
-            )
+            log_epoch = epoch == 1 or epoch % 10 == 0
+            if epoch == args.epochs:
+                log_epoch = True
+            if log_epoch:
+                print(
+                    f"[Power] epoch {epoch}/{args.epochs}  "
+                    f"train_mse={train_mse:.6f}  train_acc30={train_acc30:.2f}%  "
+                    f"val_mse={val_mse:.6f}  val_acc30={val_acc30:.2f}%  "
+                    f"lr={optimizer.param_groups[0]['lr']:.1e}  "
+                    f"{record['seconds']:.1f}s",
+                    flush=True,
+                )
 
         if select_acc30:
             if val_acc30 > best_acc30 + 1e-10:
@@ -557,9 +861,24 @@ def train_and_test(args) -> dict:
                 }
             else:
                 model_state = model.state_dict()
-            torch.save(
-                {"model_state": model_state, "epoch": epoch, "config": config},
-                checkpoint,
+            checkpoint_payload = {
+                "model_state": model_state,
+                "epoch": epoch,
+                "config": config,
+                "contract_version": CONTRACT_VERSION,
+                "dataset": args.dataset_name,
+                "result_name": args.result_name,
+                "model_name": args.model,
+                "seed": args.seed,
+                "target_transform": "per_turbine_train_standard_scaler",
+            }
+            torch.save(checkpoint_payload, checkpoint)
+            if args.result_name:
+                torch.save(checkpoint_payload, contract_checkpoint)
+            print(
+                f"[Power] checkpoint  epoch={epoch}  val_mse={val_mse:.6f}  "
+                f"path={contract_checkpoint}",
+                flush=True,
             )
         else:
             wait += 1
@@ -580,6 +899,9 @@ def train_and_test(args) -> dict:
     state = torch.load(checkpoint, map_location=device, weights_only=False)
     model.load_state_dict(state["model_state"], strict=not qwen_mlp)
     model.eval()
+    history_minutes = HISTORY_STEPS * SAMPLE_SECONDS / 60
+    horizon_minutes = horizon_steps * SAMPLE_SECONDS / 60
+    window_stride_minutes = args.window_stride_steps * SAMPLE_SECONDS / 60
 
     # 程序1：写出三份天气 npy，并在 test 上记天气 MSE
     if weather_task:
@@ -587,6 +909,7 @@ def train_and_test(args) -> dict:
             model,
             datasets,
             args.batch_size,
+            args.num_workers,
             device,
             run_dir,
             args.show_progress,
@@ -599,7 +922,7 @@ def train_and_test(args) -> dict:
             datasets["test"],
             batch_size=args.batch_size,
             shuffle=False,
-            num_workers=0,
+            num_workers=args.num_workers,
             pin_memory=True,
             drop_last=False,
         )
@@ -626,16 +949,14 @@ def train_and_test(args) -> dict:
             "model": args.model,
             "scenario": args.scenario,
             "loss": args.loss,
-            "grain": GRAIN,
-            "history_minutes": HISTORY_MINUTES,
             "history_steps": HISTORY_STEPS,
-            "horizon_minutes": args.horizon,
             "horizon_steps": horizon_steps,
             "sample_seconds": SAMPLE_SECONDS,
             "seed": args.seed,
             "best_epoch": best_epoch,
             "best_val_mse_scaled": best_mse,
             "test_mse_scaled": test_mse_scaled,
+            "checkpoint": str(checkpoint),
             "weather_forecast_dir": str(run_dir),
             "weather_forecast_files": [
                 "weather_forecast_train.npz",
@@ -648,9 +969,10 @@ def train_and_test(args) -> dict:
             encoding="utf-8",
         )
         log_line = (
-            f"grain={GRAIN} history={HISTORY_MINUTES} horizon={args.horizon} "
-            f"model={args.model} scenario={args.scenario} best_epoch={best_epoch} "
-            f"val_mse_scaled={best_mse:.6f} test_mse_scaled={test_mse_scaled:.6f}\n"
+            f"history={history_minutes:g}min horizon={horizon_minutes:g}min "
+            f"window_stride={window_stride_minutes:g}min "
+            f"val_mse_scaled={best_mse:.6f} test_mse_scaled={test_mse_scaled:.6f} "
+            f"model={args.model} scenario={args.scenario} best_epoch={best_epoch}\n"
         )
         with (PROJECT_ROOT / "run.log").open("a", encoding="utf-8") as handle:
             handle.write(log_line)
@@ -659,6 +981,7 @@ def train_and_test(args) -> dict:
                 {
                     "event": "complete",
                     "run_dir": str(run_dir),
+                    "checkpoint": str(checkpoint),
                     "best_epoch": best_epoch,
                     "best_val_mse_scaled": best_mse,
                     "test_mse_scaled": test_mse_scaled,
@@ -681,16 +1004,28 @@ def train_and_test(args) -> dict:
         leave=False,
     )
     with torch.no_grad():
-        for past, weather, target, turbine_id, target_start in test_batches:
+        for batch in test_batches:
+            if no_future_weather:
+                past, target, turbine_id, target_start = batch
+            else:
+                past, future_weather, target, turbine_id, target_start = batch
+
             past = past.to(device, non_blocking=True)
-            weather = weather.to(device, non_blocking=True)
             turbine_gpu = turbine_id.to(device, non_blocking=True)
+
+            if model_uses_future_weather:
+                future_weather = future_weather.to(device, non_blocking=True)
+
             with torch.autocast(
                 device_type=device.type,
                 dtype=torch.bfloat16,
                 enabled=device.type == "cuda",
             ):
-                prediction = model(past, weather, turbine_gpu)
+                if model_uses_future_weather:
+                    prediction = model(past, future_weather, turbine_gpu)
+                else:
+                    prediction = model(past, turbine_gpu)
+
             predictions.append(prediction.float().cpu().numpy())
             truths.append(target.numpy())
             turbines.append(turbine_id.numpy())
@@ -730,6 +1065,20 @@ def train_and_test(args) -> dict:
     save_metrics(run_dir, metrics)
     curve_overall = metrics[0]
 
+    report_path = ""
+    record_path = ""
+    if args.result_name:
+        report_path, record_path = write_power_result_contract(
+            args,
+            repository,
+            datasets,
+            contract_checkpoint,
+            best_epoch,
+            best_mse,
+            history,
+            curve_overall,
+        )
+
     if select_acc30:
         best_val_strict_acc30 = best_acc30
     else:
@@ -740,16 +1089,17 @@ def train_and_test(args) -> dict:
         "model": args.model,
         "scenario": args.scenario,
         "loss": args.loss,
-        "grain": GRAIN,
-        "history_minutes": HISTORY_MINUTES,
         "history_steps": HISTORY_STEPS,
-        "horizon_minutes": args.horizon,
         "horizon_steps": horizon_steps,
         "sample_seconds": SAMPLE_SECONDS,
         "seed": args.seed,
         "best_epoch": best_epoch,
         "best_val_mse_scaled": best_mse,
         "best_val_strict_acc30": best_val_strict_acc30,
+        "checkpoint": str(checkpoint),
+        "contract_checkpoint": str(contract_checkpoint),
+        "report": str(report_path),
+        "record": str(record_path),
         "weather_forecast_dir": args.weather_forecast_dir if predicted_weather else "",
         "metrics": metrics,
     }
@@ -758,11 +1108,13 @@ def train_and_test(args) -> dict:
         encoding="utf-8",
     )
     log_line = (
-        f"grain={GRAIN} history={HISTORY_MINUTES} horizon={args.horizon} model={args.model} "
-        f"scenario={args.scenario} best_epoch={best_epoch} "
-        f"strict_acc30={curve_overall['strict_acc30']:.6f} "
-        f"mse_kw2={curve_overall['mse_kw2']:.6f} "
-        f"mape={curve_overall['mape']:.6f}\n"
+        f"history={history_minutes:g}min horizon={horizon_minutes:g}min "
+        f"window_stride={window_stride_minutes:g}min "
+        f"test_acc30={curve_overall['strict_acc30']:.2f}%  "
+        f"test_mape={curve_overall['mape']:.2f}%  "
+        f"test_mae={curve_overall['mae_kw']:.2f}  "
+        f"test_rmse={curve_overall['rmse_kw']:.2f}  "
+        f"model={args.model} scenario={args.scenario} best_epoch={best_epoch}\n"
     )
     with (PROJECT_ROOT / "run.log").open("a", encoding="utf-8") as handle:
         handle.write(log_line)
@@ -770,8 +1122,11 @@ def train_and_test(args) -> dict:
         f"[Power] test  best_epoch={best_epoch}  "
         f"val_mse={best_mse:.6f}  val_acc30={best_acc30:.2f}%  "
         f"test_acc30={curve_overall['strict_acc30']:.2f}%  "
+        f"test_mae={curve_overall['mae_kw']:.2f}  "
         f"test_mse_kw2={curve_overall['mse_kw2']:.2f}  "
-        f"test_mape={curve_overall['mape']:.2f}%",
+        f"test_rmse={curve_overall['rmse_kw']:.2f}  "
+        f"test_mape={curve_overall['mape']:.2f}%  "
+        f"checkpoint={checkpoint}",
         flush=True,
     )
     return final

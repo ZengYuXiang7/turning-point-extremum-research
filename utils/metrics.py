@@ -5,8 +5,199 @@ import json
 from pathlib import Path
 
 import numpy as np
+import torch
 
 from config.settings import STRICT_ACC_MIN_POWER_KW, STRICT_ACC_TOLERANCE
+
+DTW_MAX_POINTS = 256
+
+
+def downsample_curve(values: np.ndarray) -> np.ndarray:
+    # 长视界按等宽区间平均，控制 DTW 的计算规模
+    point_count = min(values.size, DTW_MAX_POINTS)
+    if point_count == values.size:
+        return values
+
+    edges = np.linspace(0, values.size, point_count + 1, dtype=np.int64)
+    sampled = np.empty(point_count, dtype=np.float64)
+    for index in range(point_count):
+        left = edges[index]
+        right = edges[index + 1]
+        sampled[index] = np.mean(values[left:right])
+    return sampled
+
+
+def dtw_alignment_path(
+    truth: np.ndarray,
+    prediction: np.ndarray,
+) -> tuple[float, np.ndarray]:
+    # 用滚动代价行和方向矩阵恢复最优 DTW 路径
+    previous = np.full(prediction.size + 1, np.inf, dtype=np.float64)
+    previous[0] = 0.0
+    directions = np.empty((truth.size, prediction.size), dtype=np.int8)
+
+    for truth_index in range(truth.size):
+        current = np.full(prediction.size + 1, np.inf, dtype=np.float64)
+        for prediction_index in range(1, prediction.size + 1):
+            local_cost = abs(truth[truth_index] - prediction[prediction_index - 1])
+            diagonal_cost = previous[prediction_index - 1]
+            vertical_cost = previous[prediction_index]
+            horizontal_cost = current[prediction_index - 1]
+
+            if diagonal_cost <= vertical_cost:
+                if diagonal_cost <= horizontal_cost:
+                    best_previous = diagonal_cost
+                    direction = 0
+                else:
+                    best_previous = horizontal_cost
+                    direction = 2
+            elif vertical_cost <= horizontal_cost:
+                best_previous = vertical_cost
+                direction = 1
+            else:
+                best_previous = horizontal_cost
+                direction = 2
+
+            current[prediction_index] = local_cost + best_previous
+            directions[truth_index, prediction_index - 1] = direction
+        previous = current
+
+    # 方向 0/1/2 分别表示对角、真实轴、预测轴的前驱
+    max_path_length = truth.size + prediction.size - 1
+    reversed_path = np.empty((max_path_length, 2), dtype=np.int64)
+    truth_index = truth.size - 1
+    prediction_index = prediction.size - 1
+    path_index = 0
+
+    while True:
+        reversed_path[path_index, 0] = truth_index
+        reversed_path[path_index, 1] = prediction_index
+        if truth_index == 0 and prediction_index == 0:
+            break
+
+        direction = directions[truth_index, prediction_index]
+        if direction == 0:
+            truth_index -= 1
+            prediction_index -= 1
+        elif direction == 1:
+            truth_index -= 1
+        else:
+            prediction_index -= 1
+        path_index += 1
+
+    path = np.flip(reversed_path[: path_index + 1], axis=0).copy()
+    distance = float(previous[-1])
+    return distance, path
+
+
+def normalized_dtw(prediction: np.ndarray, truth: np.ndarray) -> float:
+    distance, _ = dtw_alignment_path(truth, prediction)
+    normalized_distance = distance / prediction.size
+    return float(normalized_distance)
+
+
+def curve_dtw(prediction: np.ndarray, truth: np.ndarray) -> float:
+    # 对所有窗口的平均预测轨迹和平均真实轨迹计算 DTW
+    prediction_curve = np.mean(prediction, axis=0, dtype=np.float64)
+    truth_curve = np.mean(truth, axis=0, dtype=np.float64)
+    prediction_curve = downsample_curve(prediction_curve)
+    truth_curve = downsample_curve(truth_curve)
+    distance = normalized_dtw(prediction_curve, truth_curve)
+    return distance
+
+
+def sequence_metric_arrays(
+    y_true: np.ndarray | torch.Tensor,
+    y_pred: np.ndarray | torch.Tensor,
+) -> tuple[np.ndarray, np.ndarray]:
+    # 在评估边界统一转为 CPU NumPy 数组
+    if isinstance(y_true, torch.Tensor):
+        true_values = y_true.detach().to(device="cpu", dtype=torch.float64).numpy()
+    else:
+        true_values = np.asarray(y_true, dtype=np.float64)
+
+    if isinstance(y_pred, torch.Tensor):
+        predicted_values = y_pred.detach().to(device="cpu", dtype=torch.float64).numpy()
+    else:
+        predicted_values = np.asarray(y_pred, dtype=np.float64)
+
+    if true_values.shape != predicted_values.shape:
+        raise ValueError(
+            "y_true and y_pred must have the same shape, got "
+            f"{true_values.shape} and {predicted_values.shape}"
+        )
+    if true_values.ndim != 2:
+        raise ValueError(
+            f"y_true and y_pred must have shape [bs, seq_len], got {true_values.shape}"
+        )
+    if true_values.shape[1] <= 1:
+        raise ValueError(
+            f"seq_len must be greater than 1, got {true_values.shape[1]}"
+        )
+    if not np.all(np.isfinite(true_values)):
+        raise ValueError("y_true contains NaN or Inf")
+    if not np.all(np.isfinite(predicted_values)):
+        raise ValueError("y_pred contains NaN or Inf")
+
+    return true_values, predicted_values
+
+
+def batched_dtw_metrics(
+    y_true: np.ndarray | torch.Tensor,
+    y_pred: np.ndarray | torch.Tensor,
+) -> tuple[np.ndarray, np.ndarray]:
+    true_values, predicted_values = sequence_metric_arrays(y_true, y_pred)
+
+    # 每条序列独立恢复 DTW path，同时计算 DTW 和 TDI
+    batch_size = true_values.shape[0]
+    sequence_length = true_values.shape[1]
+    dtw_values = np.empty(batch_size, dtype=np.float64)
+    tdi_values = np.empty(batch_size, dtype=np.float64)
+    for batch_index in range(batch_size):
+        distance, path = dtw_alignment_path(
+            true_values[batch_index],
+            predicted_values[batch_index],
+        )
+        offsets = path[:, 0] - path[:, 1]
+        squared_offsets = offsets.astype(np.float64) ** 2
+        dtw_values[batch_index] = distance / sequence_length
+        tdi_values[batch_index] = np.sum(squared_offsets) / sequence_length**2
+
+    return dtw_values, tdi_values
+
+
+def dtw(
+    y_true: np.ndarray | torch.Tensor,
+    y_pred: np.ndarray | torch.Tensor,
+    reduction: str = "mean",
+) -> float | np.ndarray:
+    if reduction not in ("mean", "none"):
+        raise ValueError(f"reduction must be 'mean' or 'none', got {reduction!r}")
+
+    dtw_values, _ = batched_dtw_metrics(y_true, y_pred)
+
+    if reduction == "none":
+        return dtw_values
+
+    mean_dtw = float(np.mean(dtw_values))
+    return mean_dtw
+
+
+def tdi(
+    y_true: np.ndarray | torch.Tensor,
+    y_pred: np.ndarray | torch.Tensor,
+    reduction: str = "mean",
+) -> float | np.ndarray:
+    if reduction not in ("mean", "none"):
+        raise ValueError(f"reduction must be 'mean' or 'none', got {reduction!r}")
+
+    _, tdi_values = batched_dtw_metrics(y_true, y_pred)
+
+    if reduction == "none":
+        return tdi_values
+
+    mean_tdi = float(np.mean(tdi_values))
+    return mean_tdi
 
 
 def point_metrics(prediction: np.ndarray, truth: np.ndarray) -> dict:
@@ -30,7 +221,7 @@ def point_metrics(prediction: np.ndarray, truth: np.ndarray) -> dict:
 
 
 def metric_bundle(prediction: np.ndarray, truth: np.ndarray, turbine_ids: np.ndarray):
-    # 齐次扁平记录：总体、分机、macro16
+    # 汇总总体、分机和 macro16 点误差指标，不执行 DTW/TDI。
     rows = []
 
     curve_overall = point_metrics(prediction, truth)

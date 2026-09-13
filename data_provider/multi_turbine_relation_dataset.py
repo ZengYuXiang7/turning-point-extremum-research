@@ -32,17 +32,12 @@ class MultiTurbineNoFutureWeatherDataset(Dataset):
             target_list.append(series.scaled[target_start:target_end, POWER_INDEX])
 
         past = np.stack(past_list, axis=0).astype(np.float32, copy=False)
-        weather = np.zeros(
-            (len(self.repository.series), self.horizon, len(WEATHER_INDICES)),
-            dtype=np.float32,
-        )
         target = np.stack(target_list, axis=0).astype(np.float32, copy=False)
         turbine_id = torch.arange(len(self.repository.series), dtype=torch.long)
         target_start_ns = int(self.repository.series[0].times[target_start])
 
         return (
             torch.from_numpy(np.ascontiguousarray(past)),
-            torch.from_numpy(weather),
             torch.from_numpy(np.ascontiguousarray(target)),
             turbine_id,
             torch.tensor(target_start_ns, dtype=torch.long),
