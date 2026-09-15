@@ -1,0 +1,25 @@
+#!/bin/bash
+set -e
+
+# 测试全部56个无缺失原始特征的DLinear；5分钟一个点。
+ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
+cd "$ROOT"
+export PYTHONUNBUFFERED=1
+export CUDA_VISIBLE_DEVICES=0
+unset LD_LIBRARY_PATH
+
+POINT_INTERVAL_SECONDS=300
+DATASET_NAME=GuangningWindPower5min
+RUN_ROOT=".runs/WeatherComparison/NoFutureWeather/DLinearAllFeatures/MSE/$DATASET_NAME"
+
+# 等长训练预测15/30分钟与1/2/4/8/12/24小时。
+uv run python run_single.py --mode test --model DLinearAllFeatures --scenario NoFutureWeather --loss MSE --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 3 --horizon-steps 3 --seed 2026 --batch-size 1024 --num-workers 4 --show-progress 0 --run-dir "$RUN_ROOT/h3_p3_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name dlinear_all_features_h3_p3_s1_seed2026
+uv run python run_single.py --mode test --model DLinearAllFeatures --scenario NoFutureWeather --loss MSE --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 6 --horizon-steps 6 --seed 2026 --batch-size 1024 --num-workers 4 --show-progress 0 --run-dir "$RUN_ROOT/h6_p6_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name dlinear_all_features_h6_p6_s1_seed2026
+uv run python run_single.py --mode test --model DLinearAllFeatures --scenario NoFutureWeather --loss MSE --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 12 --horizon-steps 12 --seed 2026 --batch-size 1024 --num-workers 4 --show-progress 0 --run-dir "$RUN_ROOT/h12_p12_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name dlinear_all_features_h12_p12_s1_seed2026
+
+# 等长训练预测2/4/8/12/24小时。
+uv run python run_single.py --mode test --model DLinearAllFeatures --scenario NoFutureWeather --loss MSE --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 24 --horizon-steps 24 --seed 2026 --batch-size 1024 --num-workers 4 --show-progress 0 --run-dir "$RUN_ROOT/h24_p24_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name dlinear_all_features_h24_p24_s1_seed2026
+uv run python run_single.py --mode test --model DLinearAllFeatures --scenario NoFutureWeather --loss MSE --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 48 --horizon-steps 48 --seed 2026 --batch-size 1024 --num-workers 4 --show-progress 0 --run-dir "$RUN_ROOT/h48_p48_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name dlinear_all_features_h48_p48_s1_seed2026
+uv run python run_single.py --mode test --model DLinearAllFeatures --scenario NoFutureWeather --loss MSE --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 96 --horizon-steps 96 --seed 2026 --batch-size 1024 --num-workers 4 --show-progress 0 --run-dir "$RUN_ROOT/h96_p96_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name dlinear_all_features_h96_p96_s1_seed2026
+uv run python run_single.py --mode test --model DLinearAllFeatures --scenario NoFutureWeather --loss MSE --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 144 --horizon-steps 144 --seed 2026 --batch-size 1024 --num-workers 4 --show-progress 0 --run-dir "$RUN_ROOT/h144_p144_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name dlinear_all_features_h144_p144_s1_seed2026
+uv run python run_single.py --mode test --model DLinearAllFeatures --scenario NoFutureWeather --loss MSE --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 288 --horizon-steps 288 --seed 2026 --batch-size 1024 --num-workers 4 --show-progress 0 --run-dir "$RUN_ROOT/h288_p288_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name dlinear_all_features_h288_p288_s1_seed2026

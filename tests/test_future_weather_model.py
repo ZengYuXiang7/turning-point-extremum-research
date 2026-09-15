@@ -2,8 +2,8 @@ import unittest
 
 import torch
 
-from config.settings import HISTORY_COLUMNS, HISTORY_STEPS, WEATHER_COLUMNS
-from models.futureweather import FutureWeatherModel
+from config import HISTORY_COLUMNS, HISTORY_STEPS, WEATHER_COLUMNS
+from models.single import FutureWeatherModel
 
 
 class TestFutureWeatherModel(unittest.TestCase):

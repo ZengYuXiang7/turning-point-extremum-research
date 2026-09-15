@@ -5,18 +5,20 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
 
-from config.settings import *
-
-
-CIRCULAR_SOURCE_COLUMNS = (
-    "风机-实时风向",
-    "偏航系统-对风角度",
-    "偏航系统-机舱位置",
-    "偏航系统-扭揽角度",
+import config as project_config
+from config import (
+    CORRELATED_HISTORY_COLUMNS,
+    DATASET_ROOT,
+    HISTORY_COLUMNS,
+    SPLIT_RATIOS,
 )
-CONSTANT_SOURCE_COLUMN = "传动链-液压站压力"
+from data_provider.window_builder import (
+    build_multi_turbine_windows,
+    build_single_turbine_windows,
+)
 
 
 @dataclass
@@ -29,7 +31,12 @@ class TurbineSeries:
 
 
 class Repository:
-    def __init__(self, root: Path = DATASET_ROOT, all_features: bool = False) -> None:
+    def __init__(
+        self,
+        root: Path = DATASET_ROOT,
+        all_features: bool = False,
+        correlated_features: bool = False,
+    ) -> None:
         self.root = Path(root)
         reference_data = np.load(self.root / "turbine_01.npy", mmap_mode="r")
         reference_times = reference_data[:, 0].astype(np.int64) * 1_000_000_000
@@ -42,21 +49,17 @@ class Repository:
         columns_path = self.root / "columns.json"
         source_columns = json.loads(columns_path.read_text(encoding="utf-8"))
 
-        # 全特征口径保留全部有效字段，周期角度以 sin/cos 替换原始角度。
-        all_feature_names = []
-        for source_column in source_columns:
-            if source_column == CONSTANT_SOURCE_COLUMN:
-                continue
-            if source_column in CIRCULAR_SOURCE_COLUMNS:
-                sin_name = f"{source_column}_sin"
-                cos_name = f"{source_column}_cos"
-                all_feature_names.append(sin_name)
-                all_feature_names.append(cos_name)
-            else:
-                all_feature_names.append(source_column)
-
-        if all_features:
-            feature_names = all_feature_names
+        if correlated_features:
+            feature_names = CORRELATED_HISTORY_COLUMNS
+            if project_config.HISTORY_FEATURE_PATH:
+                feature_path = project_config.PROJECT_ROOT / project_config.HISTORY_FEATURE_PATH
+                feature_names = json.loads(feature_path.read_text(encoding="utf-8"))
+            correlated_feature_indices = []
+            for feature_name in feature_names:
+                feature_index = source_columns.index(feature_name)
+                correlated_feature_indices.append(feature_index)
+        elif all_features:
+            feature_names = source_columns
         else:
             feature_names = HISTORY_COLUMNS
 
@@ -84,22 +87,10 @@ class Repository:
             times = data[:, 0].astype(np.int64) * 1_000_000_000
             source = data[:, 1:]
 
-            if all_features:
-                feature_values = []
-                for source_index in range(len(source_columns)):
-                    source_column = source_columns[source_index]
-                    if source_column == CONSTANT_SOURCE_COLUMN:
-                        continue
-                    values = source[:, source_index]
-                    if source_column in CIRCULAR_SOURCE_COLUMNS:
-                        radians = np.deg2rad(values)
-                        sin_values = np.sin(radians)
-                        cos_values = np.cos(radians)
-                        feature_values.append(sin_values)
-                        feature_values.append(cos_values)
-                    else:
-                        feature_values.append(values)
-                raw = np.column_stack(feature_values).astype(np.float32)
+            if correlated_features:
+                raw = source[:, correlated_feature_indices].astype(np.float32)
+            elif all_features:
+                raw = source.astype(np.float32)
             else:
                 raw = np.empty((len(source), len(HISTORY_COLUMNS)), dtype=np.float32)
                 raw[:, 0] = source[:, theory_index]
@@ -128,9 +119,16 @@ class Repository:
 
             train_mask = times < self.train_end
             train_features = raw[train_mask]
-            feature_means = np.mean(train_features, axis=0, dtype=np.float64)
-            feature_stds = np.std(train_features, axis=0, dtype=np.float64)
-            scaled = ((raw - feature_means) / feature_stds).astype(np.float32)
+            if all_features or correlated_features:
+                scaler = StandardScaler()
+                scaler.fit(train_features)
+                scaled = scaler.transform(raw).astype(np.float32)
+                feature_means = scaler.mean_
+                feature_stds = scaler.scale_
+            else:
+                feature_means = np.mean(train_features, axis=0, dtype=np.float64)
+                feature_stds = np.std(train_features, axis=0, dtype=np.float64)
+                scaled = ((raw - feature_means) / feature_stds).astype(np.float32)
             power_mean = float(feature_means[self.power_index])
             power_std = float(feature_stds[self.power_index])
 
@@ -145,94 +143,6 @@ class Repository:
             raw_series.append(series)
 
         self.series = raw_series
-
-
-
-def belongs(repository: Repository, split: str, start: int, end: int) -> bool:
-    # 目标窗口归属由目标时间决定，各区间均为左闭右开
-    if split == "train":
-        return end < repository.train_end
-    if split == "val":
-        return start >= repository.train_end and end < repository.valid_end
-    return start >= repository.valid_end
-
-
-
-def build_single_turbine_windows(repository: Repository, split: str, horizon: int):
-    windows = []
-    total = HISTORY_STEPS + horizon
-
-    for turbine_index, series in enumerate(repository.series):
-        breaks = np.flatnonzero(np.diff(series.times) != EXPECTED_DELTA_NS) + 1
-        bounds = np.concatenate([[0], breaks, [len(series.times)]])
-        segment_count = len(bounds) - 1
-
-        for segment_index in range(segment_count):
-            left = int(bounds[segment_index])
-            right = int(bounds[segment_index + 1])
-
-            if right - left < total:
-                continue
-
-            # 将首个预测起点对齐到采样时间网格
-            first_target_index = left + HISTORY_STEPS
-            first_target_ns = int(series.times[first_target_index])
-            alignment_ns = (-first_target_ns) % WINDOW_STRIDE_NS
-            alignment_steps = alignment_ns // EXPECTED_DELTA_NS
-            first_history_start = left + alignment_steps
-
-            for history_start in range(
-                first_history_start,
-                right - total + 1,
-                WINDOW_STRIDE_STEPS,
-            ):
-                target_start_index = history_start + HISTORY_STEPS
-                target_end_index = target_start_index + horizon - 1
-                target_start_ns = int(series.times[target_start_index])
-                target_end_ns = int(series.times[target_end_index])
-
-                if belongs(repository, split, target_start_ns, target_end_ns):
-                    windows.append((turbine_index, history_start))
-
-    return windows
-
-
-def build_multi_turbine_windows(repository: Repository, split: str, horizon: int):
-    windows = []
-    reference_times = repository.series[0].times
-    total = HISTORY_STEPS + horizon
-    breaks = np.flatnonzero(np.diff(reference_times) != EXPECTED_DELTA_NS) + 1
-    bounds = np.concatenate([[0], breaks, [len(reference_times)]])
-    segment_count = len(bounds) - 1
-
-    for segment_index in range(segment_count):
-        left = int(bounds[segment_index])
-        right = int(bounds[segment_index + 1])
-
-        if right - left < total:
-            continue
-
-        # 将首个预测起点对齐到采样时间网格
-        first_target_index = left + HISTORY_STEPS
-        first_target_ns = int(reference_times[first_target_index])
-        alignment_ns = (-first_target_ns) % WINDOW_STRIDE_NS
-        alignment_steps = alignment_ns // EXPECTED_DELTA_NS
-        first_history_start = left + alignment_steps
-
-        for history_start in range(
-            first_history_start,
-            right - total + 1,
-            WINDOW_STRIDE_STEPS,
-        ):
-            target_start_index = history_start + HISTORY_STEPS
-            target_end_index = target_start_index + horizon - 1
-            target_start_ns = int(reference_times[target_start_index])
-            target_end_ns = int(reference_times[target_end_index])
-
-            if belongs(repository, split, target_start_ns, target_end_ns):
-                windows.append(history_start)
-
-    return windows
 
 
 def load_weather_forecast_table(path: Path):

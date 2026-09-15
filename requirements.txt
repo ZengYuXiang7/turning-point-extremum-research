@@ -1,10 +1,12 @@
 # Documentation only. Do not install into the shared server environment.
 torch==2.4.0
+dtaidistance==2.5.1
 numpy==1.26.4
 matplotlib==3.10.8
 scipy==1.16.2
 pandas==2.3.3
 scikit-learn==1.7.2
+lightgbm==4.6.0
 torchaudio==2.4.0
 xlrd==2.0.2
 tqdm==4.70.0

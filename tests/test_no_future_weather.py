@@ -8,16 +8,19 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from config.settings import (
+from config import (
+    BASE_INTERVAL_SECONDS,
+    CORRELATED_HISTORY_COLUMNS,
     HISTORY_COLUMNS,
     HISTORY_STEPS,
+    POINT_INTERVAL_SECONDS,
+    POINT_STRIDE_STEPS,
     POWER_INDEX,
-    SAMPLE_SECONDS,
 )
-from data_provider.no_future_weather_dataset import NoFutureWeatherDataset
-from exp.trainer import print_data_summary
-from models.backbone.stockecho import StockEchoNoFutureWeather
-from models.noweather import NoFutureWeatherModel, RevIN as NoWeatherRevIN
+from tasks.single.no_future_dataset import NoFutureWeatherDataset
+from models.multi_turbine_impl.backbone.stockecho import StockEchoNoFutureWeather
+from models.single import NoFutureWeatherModel, RevIN as NoWeatherRevIN
+from tasks.single.summary import print_data_summary
 
 
 class SummaryDataset(Dataset):
@@ -33,22 +36,72 @@ class SummaryDataset(Dataset):
         target = torch.zeros(1)
         turbine_id = torch.tensor(0, dtype=torch.long)
         target_start_ns = torch.tensor(
-            self.start_ns + index * SAMPLE_SECONDS * 1_000_000_000,
+            self.start_ns + index * POINT_INTERVAL_SECONDS * 1_000_000_000,
             dtype=torch.long,
         )
         return past, target, turbine_id, target_start_ns
 
 
 class TestNoFutureWeather(unittest.TestCase):
+    def check_point_stride(self, point_stride_steps: int):
+        history_steps = 6
+        horizon_steps = 3
+        raw_steps = (history_steps + horizon_steps) * point_stride_steps
+        times = (
+            np.arange(raw_steps, dtype=np.int64)
+            * BASE_INTERVAL_SECONDS
+            * 1_000_000_000
+        )
+        scaled = np.arange(raw_steps, dtype=np.float32).reshape(-1, 1)
+        series = SimpleNamespace(times=times, scaled=scaled)
+        repository = SimpleNamespace(series=[series], power_index=0)
+
+        with (
+            patch("config.HISTORY_STEPS", history_steps),
+            patch(
+                "config.POINT_STRIDE_STEPS",
+                point_stride_steps,
+            ),
+            patch(
+                "tasks.single.no_future_dataset.build_single_turbine_windows",
+                return_value=[(0, 0)],
+            ),
+        ):
+            dataset = NoFutureWeatherDataset(repository, "train", horizon_steps)
+            past, target, _, target_start_ns = dataset[0]
+
+        expected_past = np.arange(history_steps) * point_stride_steps
+        expected_target = (
+            np.arange(history_steps, history_steps + horizon_steps)
+            * point_stride_steps
+        )
+        np.testing.assert_array_equal(past[:, 0].numpy(), expected_past)
+        np.testing.assert_array_equal(target.numpy(), expected_target)
+        self.assertEqual(tuple(past.shape), (history_steps, 1))
+        self.assertEqual(tuple(target.shape), (horizon_steps,))
+        self.assertEqual(target_start_ns.item(), times[history_steps * point_stride_steps])
+
+    def test_one_minute_points_use_six_base_steps(self):
+        self.check_point_stride(6)
+
+    def test_ten_minute_points_use_sixty_base_steps(self):
+        self.check_point_stride(60)
+
     def test_dataset_returns_no_future_weather(self):
-        steps = HISTORY_STEPS + 1
-        times = np.arange(steps, dtype=np.int64) * SAMPLE_SECONDS * 1_000_000_000
+        steps = HISTORY_STEPS * POINT_STRIDE_STEPS + 1
+        times = (
+            np.arange(steps, dtype=np.int64)
+            * BASE_INTERVAL_SECONDS
+            * 1_000_000_000
+        )
         scaled = np.zeros((steps, len(HISTORY_COLUMNS)), dtype=np.float32)
+        scaled[:, 0] = np.arange(steps)
+        scaled[:, POWER_INDEX] = np.arange(steps)
         series = SimpleNamespace(times=times, scaled=scaled)
         repository = SimpleNamespace(series=[series], power_index=POWER_INDEX)
 
         with patch(
-            "data_provider.no_future_weather_dataset.build_single_turbine_windows",
+            "tasks.single.no_future_dataset.build_single_turbine_windows",
             return_value=[(0, 0)],
         ):
             dataset = NoFutureWeatherDataset(repository, "train", 1)
@@ -57,7 +110,12 @@ class TestNoFutureWeather(unittest.TestCase):
         self.assertEqual(tuple(past.shape), (HISTORY_STEPS, len(HISTORY_COLUMNS)))
         self.assertEqual(tuple(target.shape), (1,))
         self.assertEqual(turbine_id.item(), 0)
-        self.assertEqual(target_start_ns.item(), times[HISTORY_STEPS])
+        selected_indices = np.arange(HISTORY_STEPS) * POINT_STRIDE_STEPS
+        np.testing.assert_array_equal(past[:, 0].numpy(), selected_indices)
+        self.assertEqual(target.item(), HISTORY_STEPS * POINT_STRIDE_STEPS)
+        self.assertEqual(
+            target_start_ns.item(), times[HISTORY_STEPS * POINT_STRIDE_STEPS]
+        )
 
     def test_summary_has_no_future_weather_shape(self):
         train_start = np.datetime64("2026-06-01T00:00:00", "ns").astype(np.int64)
@@ -92,12 +150,12 @@ class TestNoFutureWeather(unittest.TestCase):
         )
         self.assertNotIn("future_weather shape", text)
         self.assertIn(
-            f"历史长度={HISTORY_STEPS * SAMPLE_SECONDS / 60:g}分钟 "
+            f"历史长度={HISTORY_STEPS * POINT_INTERVAL_SECONDS / 60:g}分钟 "
             "预测长度=15分钟 滑窗步长=15分钟",
             text,
         )
         self.assertIn(
-            f"时间维=1点（每点{SAMPLE_SECONDS / 60:g}分钟）",
+            f"时间维=1点（每点{POINT_INTERVAL_SECONDS / 60:g}分钟）",
             text,
         )
 
@@ -201,6 +259,24 @@ class TestNoFutureWeather(unittest.TestCase):
             prediction = model(past, turbine_id)
 
         self.assertFalse(torch.allclose(prediction[0], prediction[1]))
+
+    def test_dlinear_correlated_features_forward(self):
+        power_index = CORRELATED_HISTORY_COLUMNS.index("风机-P")
+        model = NoFutureWeatherModel(
+            "DLinearCorrelatedFeatures",
+            horizon=1,
+            channels=len(CORRELATED_HISTORY_COLUMNS),
+            power_index=power_index,
+        )
+        past = torch.randn(2, HISTORY_STEPS, len(CORRELATED_HISTORY_COLUMNS))
+        turbine_id = torch.tensor([0, 1], dtype=torch.long)
+
+        prediction = model(past, turbine_id)
+
+        self.assertEqual(len(CORRELATED_HISTORY_COLUMNS), 21)
+        self.assertIn("机舱-舱内温度", CORRELATED_HISTORY_COLUMNS)
+        self.assertNotIn("变流器-功率因数", CORRELATED_HISTORY_COLUMNS)
+        self.assertEqual(tuple(prediction.shape), (2, 1))
 
     def test_stockecho_history_only_forward(self):
         model = StockEchoNoFutureWeather(horizon=1)

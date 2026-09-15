@@ -4,9 +4,9 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
-from config.settings import HISTORY_STEPS
-from exp.trainer import run_epoch
-from models.noweather import NoFutureWeatherModel
+from config import HISTORY_STEPS
+from models.single import NoFutureWeatherModel
+from tasks.single.epoch import run_epoch
 from utils.dbloss import DBLoss
 
 

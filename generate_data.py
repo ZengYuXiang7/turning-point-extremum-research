@@ -13,7 +13,7 @@ import numpy as np
 import xlrd
 from tqdm import tqdm
 
-from config.settings import SAMPLE_SECONDS
+from config import BASE_INTERVAL_SECONDS
 
 
 ROOT = Path(__file__).resolve().parent
@@ -77,8 +77,8 @@ def convert_numeric_column(column_values):
     return numeric_values
 
 
-def scan_member(member_index, member_path, source_indices, time_index, sample_seconds):
-    # 并行读取单个日文件的风机编号、采样点数和缺失列。
+def scan_member(member_index, member_path, source_indices):
+    # 并行读取单个日文件的风机编号、原始行数和缺失列。
     workbook = xlrd.open_workbook(member_path, on_demand=True)
     sheet = workbook.sheet_by_index(0)
     turbine_match = DEVICE_PATTERN.search(member_path.name)
@@ -86,11 +86,6 @@ def scan_member(member_index, member_path, source_indices, time_index, sample_se
     raw_row_count = sheet.nrows - 1
     column_count = sheet.ncols
     missing_columns = np.zeros(len(source_indices), dtype=bool)
-
-    times = np.asarray(
-        sheet.col_values(time_index, start_rowx=1), dtype="datetime64[s]"
-    ).astype(np.int64)
-    point_count = int(np.sum(times % sample_seconds == 0))
 
     for feature_index in range(len(source_indices)):
         source_index = source_indices[feature_index]
@@ -103,17 +98,16 @@ def scan_member(member_index, member_path, source_indices, time_index, sample_se
         member_index,
         turbine_index,
         raw_row_count,
-        point_count,
         column_count,
         missing_columns,
     )
 
 
-def build_slots(member_paths, source_indices, time_index, progress, sample_seconds):
-    # 并行统计每个日文件的采样点数，再分配不重叠槽位。
+def build_slots(member_paths, source_indices, progress):
+    # 并行统计每个日文件的原始行数，再分配不重叠槽位。
     member_count = len(member_paths)
     turbine_indices = np.empty(member_count, dtype=np.int64)
-    point_counts = np.empty(member_count, dtype=np.int64)
+    row_counts = np.empty(member_count, dtype=np.int64)
     missing_columns = np.zeros(len(source_indices), dtype=bool)
 
     with ProcessPoolExecutor(max_workers=WORKER_COUNT) as executor:
@@ -125,8 +119,6 @@ def build_slots(member_paths, source_indices, time_index, progress, sample_secon
                 member_index,
                 member_path,
                 source_indices,
-                time_index,
-                sample_seconds,
             )
             futures.append(future)
 
@@ -135,18 +127,18 @@ def build_slots(member_paths, source_indices, time_index, progress, sample_secon
                 member_index,
                 turbine_index,
                 raw_row_count,
-                point_count,
                 column_count,
                 member_missing,
             ) = future.result()
             turbine_indices[member_index] = turbine_index
-            point_counts[member_index] = point_count
+            row_counts[member_index] = raw_row_count
             missing_columns |= member_missing
             member_path = member_paths[member_index]
+            display_member_path = member_path.relative_to(ROOT)
             print(
-                f"[{member_index + 1}/{member_count}] {member_path}: "
+                f"[{member_index + 1}/{member_count}] {display_member_path}: "
                 f"raw_shape=({raw_row_count}, {column_count}), "
-                f"sample_points={point_count}",
+                f"raw_points={raw_row_count}",
                 flush=True,
             )
             progress.update(1)
@@ -156,7 +148,7 @@ def build_slots(member_paths, source_indices, time_index, progress, sample_secon
     for member_index in range(member_count):
         turbine_index = turbine_indices[member_index]
         slot_starts[member_index] = sequence_lengths[turbine_index]
-        sequence_lengths[turbine_index] += point_counts[member_index]
+        sequence_lengths[turbine_index] += row_counts[member_index]
 
     return turbine_indices, slot_starts, sequence_lengths, missing_columns
 
@@ -189,9 +181,8 @@ def write_member(
     time_index,
     slot_start,
     data_path,
-    sample_seconds,
 ):
-    # 并行解码一个日文件，并仅写入采样时刻的目标槽位。
+    # 并行解码一个日文件，并写入原始10秒时刻的目标槽位。
     workbook = xlrd.open_workbook(member_path, on_demand=True)
     sheet = workbook.sheet_by_index(0)
     raw_row_count = sheet.nrows - 1
@@ -208,8 +199,6 @@ def write_member(
 
     order = np.argsort(values[:, 0], kind="stable")
     values = values[order]
-    sample_mask = values[:, 0].astype(np.int64) % sample_seconds == 0
-    values = values[sample_mask]
     begin = int(slot_start)
     end = begin + len(values)
     data_array = np.load(data_path, mmap_mode="r+")
@@ -227,7 +216,6 @@ def write_members(
     slot_starts,
     data_paths,
     progress,
-    sample_seconds,
 ):
     # 多进程写入不同槽位，任务完成先后不影响数组中的时间顺序。
     with ProcessPoolExecutor(max_workers=WORKER_COUNT) as executor:
@@ -244,7 +232,6 @@ def write_members(
                 time_index,
                 slot_starts[member_index],
                 data_path,
-                sample_seconds,
             )
             futures.append(future)
 
@@ -285,17 +272,8 @@ def save_feature_names(building_root, feature_names):
     )
 
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--sample-seconds", type=int, default=SAMPLE_SECONDS)
-    args = parser.parse_args()
-    return args
-
-
 def main():
-    # 扫描原始记录，并行写入每台风机的指定采样序列。
-    args = parse_args()
-    sample_seconds = args.sample_seconds
+    # 扫描原始记录，并行写入每台风机的10秒底层序列。
     started = time.time()
     building_root = create_building_root()
     member_paths = collect_member_paths()
@@ -304,15 +282,15 @@ def main():
     time_index = headers.index("时间")
 
     progress = tqdm(
-        total=2 * len(member_paths), desc=f"构建{sample_seconds}秒 NPY", unit="file"
+        total=2 * len(member_paths),
+        desc=f"构建{BASE_INTERVAL_SECONDS}秒 NPY",
+        unit="file",
     )
     turbine_indices, slot_starts, sequence_lengths, missing_columns = (
         build_slots(
             member_paths,
             source_indices,
-            time_index,
             progress,
-            sample_seconds,
         )
     )
     source_indices = np.asarray(source_indices, dtype=np.int64)
@@ -336,20 +314,26 @@ def main():
         slot_starts,
         data_paths,
         progress,
-        sample_seconds,
     )
     progress.close()
 
     sort_turbine_arrays(data_paths)
     publish_output(building_root)
     elapsed_seconds = time.time() - started
+    display_output_root = OUTPUT_ROOT.relative_to(ROOT)
     print(
-        f"完成: {OUTPUT_ROOT}，风机数={TURBINE_COUNT}，"
-        f"采样间隔={sample_seconds}秒，矩阵维度={len(feature_names) + 1}，"
+        f"完成: {display_output_root}，风机数={TURBINE_COUNT}，"
+        f"底层间隔={BASE_INTERVAL_SECONDS}秒，矩阵维度={len(feature_names) + 1}，"
         f"耗时 {elapsed_seconds:.1f} 秒",
         flush=True,
     )
 
 
 if __name__ == "__main__":
+    # 数据固定构建为10秒底层序列，仅保留标准帮助入口。
+    argument_parser = argparse.ArgumentParser(
+        description="从原始 XLS 构建固定10秒间隔的 processed NPY"
+    )
+    argument_parser.parse_args()
+
     main()

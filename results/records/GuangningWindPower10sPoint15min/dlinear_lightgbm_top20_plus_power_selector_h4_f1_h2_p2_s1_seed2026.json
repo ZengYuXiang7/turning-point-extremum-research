@@ -1,0 +1,96 @@
+{
+  "contract_version": "experiment-contract-v2",
+  "dataset": "GuangningWindPower10sPoint15min",
+  "result_name": "dlinear_lightgbm_top20_plus_power_selector_h4_f1_h2_p2_s1_seed2026",
+  "model_name": "DLinearCorrelatedFeatures",
+  "purpose": "20个绝对相关系数不低于0.6的预测变量加历史功率的DLinear预测",
+  "condition": {
+    "domain": "wind_power_forecasting",
+    "scenario": "NoFutureWeather",
+    "base_interval_seconds": 10,
+    "point_interval_seconds": 900,
+    "history_steps": 2,
+    "horizon_steps": 2,
+    "window_stride_steps": 1,
+    "loss": "MSE",
+    "dbloss_weight": 0.5
+  },
+  "model_config": {
+    "input_features": 21,
+    "feature_fusion": "learned_linear_projection",
+    "moving_average_kernel": 25,
+    "temporal_projection": "shared_across_channels",
+    "turbine_embedding": true,
+    "turbine_embedding_relation": "none",
+    "embedding_relation_mix_initial": null,
+    "revin": true
+  },
+  "train_config": {
+    "seed": 2026,
+    "epochs": 100,
+    "patience": 20,
+    "batch_size": 1024,
+    "learning_rate": 0.001,
+    "num_workers": 4,
+    "loss": "MSE",
+    "dbloss_weight": 0.5,
+    "selection_metric": "validation_mse_scaled"
+  },
+  "data_config": {
+    "source": "dataset/processed/turbine_01.npy ... turbine_16.npy",
+    "available_samples": 202672,
+    "split": "chronological_70_10_20",
+    "split_seeds": "none",
+    "train_samples": 141888,
+    "valid_samples": 20256,
+    "test_samples": 40528,
+    "features": "发电机-发电机转速, 传动链-齿轮箱高速轴非驱动端轴承温度, 发电机-发电机定子V相线圈温度, 变桨轮毂-2#桨叶角度, 变桨轮毂-3#桨叶角度, 变桨轮毂-1#桨叶角度, 变流器-功率因数, 风机-理论功率-计算, 风机-环境温度, 变流器-网侧L3相电流, 传动链-主轴转速, 风机-实时风速, 发电机-发电机定子U相线圈温度, 塔筒-塔底控制柜温度, 传动链-齿轮箱油路进入口温度, 机舱-机舱侧向振动幅度, 变流器-网侧L2相电流, 风机-Q, 塔筒-塔底温度, 变流器-网侧L1相电流, 风机-P",
+    "feature_normalization": "per_turbine_train_standard_scaler_then_window_revin",
+    "target": "风机-P",
+    "target_transform": "per_turbine_train_standard_scaler"
+  },
+  "mean_std": {
+    "Acc30": {
+      "mean": 59.91259682697485,
+      "std": 0.0
+    },
+    "MAE": {
+      "mean": 312.78521922488386,
+      "std": 0.0
+    },
+    "MAPE": {
+      "mean": 43.194193969954135,
+      "std": 0.0
+    },
+    "MSE": {
+      "mean": 264482.978193559,
+      "std": 0.0
+    },
+    "RMSE": {
+      "mean": 514.2790858994355,
+      "std": 0.0
+    }
+  },
+  "significance": [],
+  "rounds": [
+    {
+      "seed": 2026,
+      "best_epoch": 2,
+      "best_valid": {
+        "MSE_scaled": 0.11068546575935263
+      },
+      "test_metrics": {
+        "Acc30": 59.91259682697485,
+        "MAE": 312.78521922488386,
+        "MSE": 264482.978193559,
+        "RMSE": 514.2790858994355,
+        "MAPE": 43.194193969954135
+      },
+      "checkpoint": "checkpoints/GuangningWindPower10sPoint15min/dlinear_lightgbm_top20_plus_power_selector_h4_f1_h2_p2_s1_seed2026/round_1.pt",
+      "early_stop": {
+        "patience": 20,
+        "completed_epochs": 22
+      }
+    }
+  ]
+}

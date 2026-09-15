@@ -1,0 +1,94 @@
+{
+  "contract_version": "experiment-contract-v2",
+  "dataset": "GuangningWindPower10sPoint15min",
+  "result_name": "dlinear_all_raw56_h4_p1_s1_seed2026",
+  "model_name": "DLinearAllFeatures",
+  "purpose": "全部有效历史特征的DLinear功率预测",
+  "condition": {
+    "domain": "wind_power_forecasting",
+    "scenario": "NoFutureWeather",
+    "base_interval_seconds": 10,
+    "point_interval_seconds": 900,
+    "history_steps": 4,
+    "horizon_steps": 1,
+    "window_stride_steps": 1,
+    "loss": "MSE",
+    "dbloss_weight": 0.5
+  },
+  "model_config": {
+    "input_features": 56,
+    "feature_fusion": "learned_linear_projection",
+    "moving_average_kernel": 25,
+    "temporal_projection": "shared_across_channels",
+    "turbine_embedding": true,
+    "revin": true
+  },
+  "train_config": {
+    "seed": 2026,
+    "epochs": 100,
+    "patience": 10,
+    "batch_size": 1024,
+    "learning_rate": 0.001,
+    "num_workers": 4,
+    "loss": "MSE",
+    "dbloss_weight": 0.5,
+    "selection_metric": "validation_mse_scaled"
+  },
+  "data_config": {
+    "source": "dataset/processed/turbine_01.npy ... turbine_16.npy",
+    "available_samples": 202688,
+    "split": "chronological_70_10_20",
+    "split_seeds": "none",
+    "train_samples": 141872,
+    "valid_samples": 20272,
+    "test_samples": 40544,
+    "features": "发电机-发电机非驱动端轴承温度, 变桨轮毂-变桨电机3电流, 传动链-齿轮箱油温, 机舱-机舱侧向振动幅度, 变桨轮毂-2#桨电机温度, 偏航系统-机舱位置, 变桨轮毂-变桨电池柜1温度, 传动链-主轴转速, 变流器-电网频率, 机舱-舱内温度, 变流器-功率因数, 传动链-齿轮箱高速轴非驱动端轴承温度, 变流器-网侧L1相电压, 变流器-网侧L3相电流, 传动链-齿轮箱中速轴驱动端轴承温度, 变流器-网侧L2相电压, 发电机-发电机定子U相线圈温度, 塔筒-塔底温度, 发电机-发电机定子W相线圈温度, 传动链-齿轮箱油路进入口温度, 发电机-发电机驱动端轴承温度, 变流器-网侧L2相电流, 传动链-齿轮箱中速轴非驱动端轴承温度, 变桨轮毂-1#桨叶角度, 变桨轮毂-3#桨叶角度, 传动链-齿轮箱油路滤网前油压, 变桨轮毂-变桨电池2电压, 风机-环境温度, 机舱-机舱轴向振动幅度, 偏航系统-对风角度, 风机-实时风速, 偏航系统-扭揽角度, 变桨轮毂-3#桨电机温度, 发电机-发电机转速, 风机-理论功率-计算, 变桨轮毂-1#桨电机温度, 变桨轮毂-变桨电池3电压, 塔筒-塔底控制柜温度, 变桨轮毂-变桨电机1电流, 风机-实时风向, 传动链-主轴承温度1, 发电机-发电机定子V相线圈温度, 风机-总发电量, 传动链-齿轮箱高速轴驱动端轴承温度, 变桨轮毂-变桨电机2电流, 变桨轮毂-变桨电池1电压, 变桨轮毂-变桨电池柜3温度, 风机-Q, 变桨轮毂-轮毂温度, 传动链-液压站压力, 变流器-网侧L1相电流, 变流器-网侧L3相电压, 变桨轮毂-2#桨叶角度, 变桨轮毂-变桨电池柜2温度, 传动链-齿轮箱入口油压, 风机-P",
+    "feature_normalization": "per_turbine_train_standard_scaler_then_window_revin",
+    "target": "风机-P",
+    "target_transform": "per_turbine_train_standard_scaler"
+  },
+  "mean_std": {
+    "Acc30": {
+      "mean": 65.4519855894654,
+      "std": 0.0
+    },
+    "MAE": {
+      "mean": 277.0998036912227,
+      "std": 0.0
+    },
+    "MAPE": {
+      "mean": 38.337456352696904,
+      "std": 0.0
+    },
+    "MSE": {
+      "mean": 213061.11125712655,
+      "std": 0.0
+    },
+    "RMSE": {
+      "mean": 461.5854322410171,
+      "std": 0.0
+    }
+  },
+  "significance": [],
+  "rounds": [
+    {
+      "seed": 2026,
+      "best_epoch": 6,
+      "best_valid": {
+        "MSE_scaled": 0.08972740036092307
+      },
+      "test_metrics": {
+        "Acc30": 65.4519855894654,
+        "MAE": 277.0998036912227,
+        "MSE": 213061.11125712655,
+        "RMSE": 461.5854322410171,
+        "MAPE": 38.337456352696904
+      },
+      "checkpoint": "checkpoints/GuangningWindPower10sPoint15min/dlinear_all_raw56_h4_p1_s1_seed2026/round_1.pt",
+      "early_stop": {
+        "patience": 10,
+        "completed_epochs": 16
+      }
+    }
+  ]
+}

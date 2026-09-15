@@ -1,0 +1,104 @@
+{
+  "contract_version": "experiment-contract-v2",
+  "dataset": "GuangningWindPower16Turbine15min",
+  "result_name": "multi_turbine_h16_p32_s1_seed2026",
+  "model_name": "MultiTurbine",
+  "purpose": "16台风机联合面板的SATRA PSTR-Net功率预测",
+  "condition": {
+    "domain": "wind_power_forecasting",
+    "scenario": "MultiTurbine",
+    "base_interval_seconds": 10,
+    "point_interval_seconds": 900,
+    "history_steps": 16,
+    "horizon_steps": 32,
+    "window_stride_steps": 1,
+    "loss": "MSE",
+    "dbloss_weight": 0.5
+  },
+  "model_config": {
+    "input_features": 19,
+    "feature_fusion": "state_conditioned_pattern_experts",
+    "moving_average_kernel": null,
+    "temporal_projection": "residual_temporal_cnn_plus_top3_moe",
+    "turbine_embedding": false,
+    "turbine_embedding_relation": "none",
+    "embedding_relation_mix_initial": null,
+    "revin": false,
+    "satra_hidden_dim": 64,
+    "satra_depth": 10,
+    "satra_kernel_size": 3,
+    "satra_heads": 4,
+    "satra_tower_layers": 1,
+    "satra_expert_top_k": 3,
+    "satra_use_dtw_prior": false,
+    "satra_prior": "disabled"
+  },
+  "train_config": {
+    "seed": 2026,
+    "epochs": 100,
+    "patience": 10,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "num_workers": 4,
+    "loss": "MSE",
+    "dbloss_weight": 0.5,
+    "selection_metric": "validation_mse_scaled"
+  },
+  "data_config": {
+    "source": "dataset/processed/turbine_01.npy ... turbine_16.npy",
+    "available_samples": 12563,
+    "split": "chronological_70_10_20",
+    "split_seeds": "none",
+    "train_samples": 8824,
+    "valid_samples": 1236,
+    "test_samples": 2503,
+    "features": "风机-理论功率-计算, 风机-实时风速, 风机-实时风向_sin, 风机-实时风向_cos, 风机-环境温度, 机舱-舱内温度, 塔筒-塔底温度, 发电机-发电机转速, 传动链-主轴转速, 变桨轮毂-1#桨叶角度, 变桨轮毂-2#桨叶角度, 变桨轮毂-3#桨叶角度, 偏航系统-对风角度_sin, 偏航系统-对风角度_cos, 偏航系统-机舱位置_sin, 偏航系统-机舱位置_cos, 偏航系统-扭揽角度_sin, 偏航系统-扭揽角度_cos, 风机-P",
+    "feature_normalization": "per_turbine_train_standard_scaler",
+    "target": "风机-P",
+    "target_transform": "per_turbine_train_standard_scaler"
+  },
+  "mean_std": {
+    "Acc30": {
+      "mean": 30.62713223387363,
+      "std": 0.0
+    },
+    "MAE": {
+      "mean": 816.1770686494604,
+      "std": 0.0
+    },
+    "MAPE": {
+      "mean": 109.49174752598141,
+      "std": 0.0
+    },
+    "MSE": {
+      "mean": 1343085.5876417495,
+      "std": 0.0
+    },
+    "RMSE": {
+      "mean": 1158.9156947948154,
+      "std": 0.0
+    }
+  },
+  "significance": [],
+  "rounds": [
+    {
+      "seed": 2026,
+      "best_epoch": 2,
+      "best_valid": {
+        "MSE_scaled": 0.4169765840235509
+      },
+      "test_metrics": {
+        "Acc30": 30.62713223387363,
+        "MAE": 816.1770686494604,
+        "MSE": 1343085.5876417495,
+        "RMSE": 1158.9156947948154,
+        "MAPE": 109.49174752598141
+      },
+      "checkpoint": "checkpoints/GuangningWindPower16Turbine15min/multi_turbine_h16_p32_s1_seed2026/round_1.pt",
+      "early_stop": {
+        "patience": 10,
+        "completed_epochs": 12
+      }
+    }
+  ]
+}

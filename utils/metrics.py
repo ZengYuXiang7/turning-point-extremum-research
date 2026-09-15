@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from config.settings import STRICT_ACC_MIN_POWER_KW, STRICT_ACC_TOLERANCE
+from config import STRICT_ACC_MIN_POWER_KW, STRICT_ACC_TOLERANCE
 
 DTW_MAX_POINTS = 256
 
