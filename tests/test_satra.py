@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from tasks.multi_turbine.relation_prior import build_wind_dtw_relation
-from models.multi_turbine import MultiTurbineModel
+from models.multi_turbine_impl.multi_turbine import MultiTurbineBackbone
 from tasks.multi_turbine.pretrain import MaskedMarketReconstruction
 
 
@@ -22,8 +22,8 @@ class TestMultiTurbine(unittest.TestCase):
         channels: int = 5,
         horizon: int = 3,
         use_dtw_prior: bool = False,
-    ) -> MultiTurbineModel:
-        model = MultiTurbineModel(
+    ) -> MultiTurbineBackbone:
+        model = MultiTurbineBackbone(
             channels=channels,
             history_steps=8,
             horizon=horizon,

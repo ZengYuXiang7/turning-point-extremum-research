@@ -46,7 +46,7 @@ def pretrain_satra_encoder(args, model, repository, datasets, loaders, device, r
         cuda_devices.append(device.index)
     # 第一阶段独立随机流，避免改变第二阶段的数据采样顺序。
     with torch.random.fork_rng(devices=cuda_devices):
-        pretrainer = MaskedMarketReconstruction(model).to(device)
+        pretrainer = MaskedMarketReconstruction(model.backbone).to(device)
         optimizer = torch.optim.AdamW(
             pretrainer.parameters(),
             lr=args.pretrain_learning_rate,

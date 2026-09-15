@@ -18,8 +18,11 @@ from config import (
     POWER_INDEX,
 )
 from tasks.single.no_future_dataset import NoFutureWeatherDataset
-from models.multi_turbine_impl.backbone.stockecho import StockEchoNoFutureWeather
-from models.single import NoFutureWeatherModel, RevIN as NoWeatherRevIN
+from models.multi_turbine_impl.stockecho import StockEchoNoFutureWeather
+from models.single_impl.no_future_model import (
+    NoFutureWeatherModel,
+    RevIN as NoWeatherRevIN,
+)
 from tasks.single.summary import print_data_summary
 
 

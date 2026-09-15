@@ -12,10 +12,10 @@ from config import (
     TEMPORAL_POOL_STEPS,
     WEATHER_COLUMNS,
 )
-from models.single_impl.backbone.dlinear import DLinear
-from models.single_impl.backbone.embed import Emb
-from models.single_impl.backbone.patch_config import PatchConfig
-from models.single_impl.backbone.patchmlp import Model as OfficialPatchMLP
+from models.single_impl.dlinear import DLinear
+from models.single_impl.embed import Emb
+from models.single_impl.patch_config import PatchConfig
+from models.single_impl.patchmlp import Model as OfficialPatchMLP
 
 
 class VariableSelectionNetwork(nn.Module):

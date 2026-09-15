@@ -9,25 +9,35 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from config import HISTORY_STEPS
+from models.single import SingleModel
 from tasks.single.pretrain import pretrain_power_encoder
 from tasks.single.pretrain_epoch import (
     MaskedTokenPretraining,
     run_masked_epoch,
     sample_token_mask,
 )
-from models.single import NoFutureWeatherModel
 from tasks.single.configuration import parse_args
 
 
 class TestMaskedPretraining(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(2026)
-        self.model = NoFutureWeatherModel(
-            "PatchMLPAllFeatures", horizon=3, channels=56, power_index=55,
+        model_args = SimpleNamespace(
+            model="PatchMLPAllFeatures",
+            scenario="NoFutureWeather",
+            horizon_steps=3,
         )
+        repository = SimpleNamespace(
+            feature_names=list(range(56)),
+            power_index=55,
+        )
+        self.model = SingleModel(model_args, repository)
         self.past = torch.randn(4, HISTORY_STEPS, 56)
         self.turbine_id = torch.tensor([0, 1, 2, 3])
-        self.pretrainer = MaskedTokenPretraining(self.model, HISTORY_STEPS)
+        self.pretrainer = MaskedTokenPretraining(
+            self.model.backbone,
+            HISTORY_STEPS,
+        )
 
     def test_pretrain_flag_controls_activation_independently_from_epochs(self):
         # 轮数是训练参数，只有pretrain开关决定是否执行第一阶段
@@ -115,8 +125,11 @@ class TestMaskedPretraining(unittest.TestCase):
             pretrain_patience=2, print_freq=1,
             show_progress=0,
         )
-        initial_embedding = self.model.patch_embedding.EmbLayer_1.ff[0].weight.detach().clone()
-        initial_power_head = self.model.output_projection.weight.detach().clone()
+        backbone = self.model.backbone
+        initial_embedding = (
+            backbone.patch_embedding.EmbLayer_1.ff[0].weight.detach().clone()
+        )
+        initial_power_head = backbone.output_projection.weight.detach().clone()
         rng_state = torch.get_rng_state().clone()
         with tempfile.TemporaryDirectory() as directory:
             summary = pretrain_power_encoder(
@@ -133,12 +146,13 @@ class TestMaskedPretraining(unittest.TestCase):
             checkpoint = torch.load(summary["checkpoint"], weights_only=True)
             state = checkpoint["model_state"]
             for name, parameter in self.model.state_dict().items():
-                torch.testing.assert_close(parameter, state["backbone." + name])
+                torch.testing.assert_close(parameter, state[name])
 
         # 热身更新编码器，预测头保持初始化且不携带重建头
-        self.assertFalse(torch.equal(initial_embedding, self.model.patch_embedding.EmbLayer_1.ff[0].weight))
-        torch.testing.assert_close(initial_power_head, self.model.output_projection.weight)
-        self.assertEqual(self.model.output_projection.weight.grad, None)
+        trained_embedding = backbone.patch_embedding.EmbLayer_1.ff[0].weight
+        self.assertFalse(torch.equal(initial_embedding, trained_embedding))
+        torch.testing.assert_close(initial_power_head, backbone.output_projection.weight)
+        self.assertEqual(backbone.output_projection.weight.grad, None)
         self.assertFalse(any("reconstruction" in name for name in self.model.state_dict()))
 
         # 第二阶段完整历史输入联合训练预测头与编码器
@@ -150,7 +164,7 @@ class TestMaskedPretraining(unittest.TestCase):
         optimizer.step()
         self.assertEqual(tuple(prediction.shape), (4, 3))
         self.assertTrue(torch.isfinite(prediction).all())
-        self.assertFalse(torch.equal(initial_power_head, self.model.output_projection.weight))
+        self.assertFalse(torch.equal(initial_power_head, backbone.output_projection.weight))
 
 
 if __name__ == "__main__":

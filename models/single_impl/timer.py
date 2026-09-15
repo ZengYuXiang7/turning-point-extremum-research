@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 from config import HISTORY_COLUMNS, POWER_INDEX, PROJECT_ROOT, WEATHER_COLUMNS
-from models.single_impl.backbone.timer_weather_adapter import (
+from models.single_impl.timer_weather_adapter import (
     MultivariatePatchAdapter,
     PatchForecastHead,
 )

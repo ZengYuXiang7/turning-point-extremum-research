@@ -5,7 +5,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
 from config import HISTORY_STEPS
-from models.single import NoFutureWeatherModel
+from models.single_impl.no_future_model import NoFutureWeatherModel
 from tasks.single.epoch import run_epoch
 from utils.dbloss import DBLoss
 

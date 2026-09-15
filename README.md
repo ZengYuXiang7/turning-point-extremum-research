@@ -5,12 +5,12 @@
 
 Dataset、任务接线和可视化按开发边界放在 `tasks/single/` 和 `tasks/multi_turbine/`。
 两个顶层 Model 入口分别是 `models/single.py` 和 `models/multi_turbine.py`，内部实现分别放在
-`models/single_impl/` 和 `models/multi_turbine_impl/`。两个 `task.py` 只导入对应的顶层
-Model 入口，后台骨干不暴露给另一条任务链。
+`models/single_impl/` 和 `models/multi_turbine_impl/`。顶层类只持有
+`self.backbone`，`forward` 原样委托给骨干；两个 `task.py` 也只导入各自的顶层 Model 入口。
 
 ## StockEcho风电模型
 
-StockEcho 位于 `models/multi_turbine_impl/backbone/stockecho.py`，包括因果时序编码、可靠关系证据、
+StockEcho 位于 `models/multi_turbine_impl/stockecho.py`，包括因果时序编码、可靠关系证据、
 稠密关系图、响应传递和对齐残差融合。每台风机拥有独立的可学习身份嵌入，
 该嵌入加入该风机的全部时间token；构图时再由投影后的身份嵌入学习两两关系，
 并通过可学习权重与窗口内的动态轨迹关系融合。输入变量映射为16维风电关系表示，
@@ -21,7 +21,7 @@ StockEcho 位于 `models/multi_turbine_impl/backbone/stockecho.py`，包括因�
 
 ## MultiTurbine 风电模型
 
-`MultiTurbine` 是 `models/multi_turbine.py` 中独立定义的联合面板模型，采用从上级 `SATRA`
+`MultiTurbine` 的实际骨干位于 `models/multi_turbine_impl/multi_turbine.py`，采用从上级 `SATRA`
 项目迁入的 PSTR-Net 设计：每台风机先经过
 State-Conditioned Pattern Expert（残差时序 CNN 与六个异构专家的 Top-3 路由），再在每个
 历史时刻经过关注全部风机的语义 Transformer 塔，按“特征到功率、历史到预测步”输出多步功率。
@@ -47,7 +47,7 @@ env -u LD_LIBRARY_PATH uv run python run_multi.py \
 
 ## QwenMLP
 
-`models/single_impl/backbone/qwen.py` 使用过去4小时的20维历史变量生成连续数值Patch，送入冻结的
+`models/single_impl/qwen.py` 使用过去4小时的20维历史变量生成连续数值Patch，送入冻结的
 Qwen2.5-1.5B Base编码器，再由MLP残差头直接预测未来功率。该模型不读取预测区间
 内的真实天气；官方预训练权重放在 `models/pretrained/Qwen2.5-1.5B`，且不纳入Git。
 
@@ -63,7 +63,7 @@ HORIZONS="15" LOSSES="MSE" BATCH_SIZE=64 \
 
 ## TimerWeatherMLP
 
-`models/single_impl/backbone/timer.py` 使用预训练的 Timer-84M 因果时序 Transformer。
+`models/single_impl/timer.py` 使用预训练的 Timer-84M 因果时序 Transformer。
 过去4小时的19维历史变量与预测区间的12维未来天气均以15分钟为一个点输入。
 Timer 检查点保持96点 Patch 约束，Adapter 会将较短窗口补齐到该宽度后再沿时间
 方向拼接。模型不增加单独的历史—未来交叉注意力；Timer 主干完成时序交互。
@@ -165,9 +165,9 @@ validation最优checkpoint；尚未训练或缺少产物时会直接报错，不
 根目录的 `run_multi.py` 与 `run_single.py` 分别负责联合面板和常规预测，训练完成后都会立即生成 checkpoint 预测图：
 
 - `run_multi.py` 只调用 `tasks/multi_turbine/task.py`，读取该任务 Dataset，并从
-  `models/multi_turbine.py` 选择 `MultiTurbineModel` 或 `StockEchoNoFutureWeather`。
+  `models/multi_turbine.py` 通过顶层选择函数进入 `MultiTurbineModel`。
 - `run_single.py` 只调用 `tasks/single/task.py`，读取该任务 Dataset，并从
-  `models/single.py` 选择对应常规模型。
+  `models/single.py` 通过顶层选择函数进入 `SingleModel`。
 - `tasks/multi_turbine/trainer.py` 与 `tasks/single/trainer.py` 分别维护各自的训练、验证、
   测试、预训练和结果写入管道；各自的模型与场景参数也分别定义在对应 `configuration.py`。
 

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from models.single_impl.backbone.embed import Emb
+from models.single_impl.embed import Emb
 
 
 class moving_avg(nn.Module):

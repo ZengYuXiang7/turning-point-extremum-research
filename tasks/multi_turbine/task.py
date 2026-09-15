@@ -4,7 +4,7 @@ from argparse import Namespace
 
 import torch
 
-from models.multi_turbine import build_model
+from models.multi_turbine import MultiTurbineModel
 from tasks.multi_turbine.dataset import (
     make_multi_turbine_no_future_weather_loaders,
 )
@@ -41,7 +41,7 @@ def build_task_components(args, device: torch.device, num_workers: int):
         )
         relation_weight = None
 
-    model = build_model(args, repository, relation_weight, device)
+    model = MultiTurbineModel(args, repository, relation_weight).to(device)
     return repository, datasets, loaders, model
 
 
@@ -67,12 +67,15 @@ def load_checkpoint_model(model, config, checkpoint):
 def train_and_test(args) -> dict:
     if args.scenario != "MultiTurbine":
         raise ValueError("multi_turbine_task requires scenario MultiTurbine")
+
     if args.model not in ("StockEcho", "MultiTurbine"):
         raise ValueError("MultiTurbine task supports StockEcho and MultiTurbine only")
 
     device = prepare_task_runtime(args.seed)
+
     repository, datasets, loaders, model = (
         build_task_components(args, device, args.num_workers)
     )
+    
     result = train_task(args, repository, datasets, loaders, model, device)
     return result

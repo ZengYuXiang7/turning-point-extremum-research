@@ -44,7 +44,10 @@ def pretrain_power_encoder(args, model, repository, datasets, loaders, device, r
     if device.type == "cuda":
         cuda_devices.append(device.index)
     with torch.random.fork_rng(devices=cuda_devices):
-        pretrainer = MaskedTokenPretraining(model, args.history_steps).to(device)
+        pretrainer = MaskedTokenPretraining(
+            model.backbone,
+            args.history_steps,
+        ).to(device)
         
         optimizer = torch.optim.AdamW(
             pretrainer.parameters(), lr=args.pretrain_learning_rate,

@@ -3,7 +3,7 @@ import unittest
 import torch
 
 from config import HISTORY_COLUMNS, HISTORY_STEPS, WEATHER_COLUMNS
-from models.multi_turbine_impl.backbone.stockecho import (
+from models.multi_turbine_impl.stockecho import (
     StockEchoNoFutureWeather,
     StockEchoWindPower,
 )

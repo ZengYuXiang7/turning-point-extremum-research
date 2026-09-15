@@ -9,11 +9,11 @@ from config import (
     PATCH_LENGTHS,
     POWER_INDEX,
 )
-from models.single_impl.backbone.dlinear import DLinear
-from models.single_impl.backbone.embed import Emb
-from models.single_impl.backbone.patch_config import PatchConfig
-from models.single_impl.backbone.patchmlp import Encoder as PatchEncoder
-from models.single_impl.backbone.patchmlp import series_decomp as PatchDecomposition
+from models.single_impl.dlinear import DLinear
+from models.single_impl.embed import Emb
+from models.single_impl.patch_config import PatchConfig
+from models.single_impl.patchmlp import Encoder as PatchEncoder
+from models.single_impl.patchmlp import series_decomp as PatchDecomposition
 
 
 class RevIN(nn.Module):

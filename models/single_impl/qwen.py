@@ -7,7 +7,7 @@ from torch import nn
 from transformers import AutoModel
 
 from config import HISTORY_COLUMNS, POWER_INDEX, PROJECT_ROOT
-from models.single_impl.backbone.qwen_mlp import (
+from models.single_impl.qwen_mlp import (
     NumericPatchTokenizer,
     ResidualForecastHead,
 )

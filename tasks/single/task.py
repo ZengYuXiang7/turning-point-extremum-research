@@ -4,7 +4,7 @@ from argparse import Namespace
 
 import torch
 
-from models.single import build_model
+from models.single import SingleModel
 from tasks.single.forecast_weather_dataset import make_forecast_weather_loaders
 from tasks.single.no_future_dataset import make_no_future_weather_loaders
 from tasks.single.oracle_future_dataset import make_oracle_future_weather_loaders
@@ -55,7 +55,8 @@ def build_task_components(args, device: torch.device, num_workers: int):
                 correlated_features=correlated_features,
             )
 
-    model, model_uses_future_weather = build_model(args, repository, device)
+    model = SingleModel(args, repository).to(device)
+    model_uses_future_weather = weather_task or predicted_weather or oracle
 
     return repository, datasets, loaders, model, model_uses_future_weather
 

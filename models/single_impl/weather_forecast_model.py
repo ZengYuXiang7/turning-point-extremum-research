@@ -5,7 +5,7 @@ from torch import nn
 
 import config as project_config
 from config import WEATHER_COLUMNS
-from models.single_impl.backbone.dlinear import DLinear
+from models.single_impl.dlinear import DLinear
 
 
 class WeatherForecastModel(nn.Module):

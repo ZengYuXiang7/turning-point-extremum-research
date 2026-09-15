@@ -51,7 +51,7 @@ def build_optimization(args, model, device):
             trainable_parameters.append(parameter)
     if args.model == "TimerWeatherMLP":
         optimizer = torch.optim.AdamW(
-            model.parameter_groups(
+            model.backbone.parameter_groups(
                 adapter_lr=args.learning_rate,
                 backbone_lr=args.timer_backbone_learning_rate,
             ),

@@ -26,7 +26,7 @@ def checkpoint_model_state(args, model):
     if args.model == "QwenMLP":
         model_state = {}
         for name, value in model.state_dict().items():
-            if not name.startswith("llm."):
+            if not name.startswith("backbone.llm."):
                 model_state[name] = value.detach().cpu()
     else:
         model_state = model.state_dict()
