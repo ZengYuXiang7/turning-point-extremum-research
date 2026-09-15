@@ -26,34 +26,15 @@ def build_task_components(args, device: torch.device, num_workers: int):
 
     # 天气预测任务读取自己的历史天气监督数据。
     if weather_task:
-        repository, datasets, loaders = make_forecast_weather_loaders(
-            horizon=args.horizon_steps,
-            batch_size=args.batch_size,
-            num_workers=num_workers,
-        )
+        repository, datasets, loaders = make_forecast_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers,)
     elif predicted_weather:
-        repository, datasets, loaders = make_predicted_future_weather_loaders(
-            horizon=args.horizon_steps,
-            batch_size=args.batch_size,
-            num_workers=num_workers,
-            weather_forecast_dir=args.weather_forecast_dir,
-        )
+        repository, datasets, loaders = make_predicted_future_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers, weather_forecast_dir=args.weather_forecast_dir,)
     else:
         # 常规功率任务按未来天气口径读取单风机窗口。
         if oracle:
-            repository, datasets, loaders = make_oracle_future_weather_loaders(
-                horizon=args.horizon_steps,
-                batch_size=args.batch_size,
-                num_workers=num_workers,
-            )
+            repository, datasets, loaders = make_oracle_future_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers,)
         else:
-            repository, datasets, loaders = make_no_future_weather_loaders(
-                horizon=args.horizon_steps,
-                batch_size=args.batch_size,
-                num_workers=num_workers,
-                all_features=all_features,
-                correlated_features=correlated_features,
-            )
+            repository, datasets, loaders = make_no_future_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers, all_features=all_features, correlated_features=correlated_features,)
 
     model = SingleModel(args, repository).to(device)
     model_uses_future_weather = weather_task or predicted_weather or oracle
@@ -75,10 +56,7 @@ def load_checkpoint_model(model, config, checkpoint):
     # 使用 single 训练阶段相同的编译包装载入最佳权重。
     if config["compile_mode"] == "reduce-overhead":
         model = torch.compile(model, mode="reduce-overhead")
-    model.load_state_dict(
-        checkpoint["model_state"],
-        strict=config["model"] != "QwenMLP",
-    )
+    model.load_state_dict(checkpoint["model_state"], strict=config["model"] != "QwenMLP",)
     model.eval()
     return model, checkpoint["epoch"]
 
@@ -93,13 +71,5 @@ def train_and_test(args) -> dict:
     repository, datasets, loaders, model, model_uses_future_weather = (
         build_task_components(args, device, args.num_workers)
     )
-    result = train_task(
-        args,
-        repository,
-        datasets,
-        loaders,
-        model,
-        device,
-        model_uses_future_weather,
-    )
+    result = train_task(args, repository, datasets, loaders, model, device, model_uses_future_weather,)
     return result

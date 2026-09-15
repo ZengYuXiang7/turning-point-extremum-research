@@ -25,26 +25,16 @@ class RevIN(nn.Module):
         self.affine_weight = nn.Parameter(torch.ones(1, 1, channels))
         self.affine_bias = nn.Parameter(torch.zeros(1, 1, channels))
 
-    def normalize(
-        self,
-        values: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def normalize(self, values: torch.Tensor,) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # 每个样本使用自身历史窗统计量
         instance_mean = values.mean(dim=1, keepdim=True).detach()
         centered = values - instance_mean
-        instance_std = torch.sqrt(
-            centered.square().mean(dim=1, keepdim=True) + self.eps
-        ).detach()
+        instance_std = torch.sqrt(centered.square().mean(dim=1, keepdim=True) + self.eps).detach()
         normalized = centered / instance_std
         normalized = normalized * self.affine_weight + self.affine_bias
         return normalized, instance_mean, instance_std
 
-    def denormalize(
-        self,
-        normalized: torch.Tensor,
-        instance_mean: torch.Tensor,
-        instance_std: torch.Tensor,
-    ) -> torch.Tensor:
+    def denormalize(self, normalized: torch.Tensor, instance_mean: torch.Tensor, instance_std: torch.Tensor,) -> torch.Tensor:
         # 使用同一样本的历史统计量恢复全部输出特征
         restored = (normalized - self.affine_bias) / (
             self.affine_weight + self.eps * self.eps
@@ -56,13 +46,7 @@ class RevIN(nn.Module):
 class NoFutureWeatherModel(nn.Module):
     """仅使用历史序列预测未来功率。"""
 
-    def __init__(
-        self,
-        model_name: str,
-        horizon: int,
-        channels: int,
-        power_index: int,
-    ) -> None:
+    def __init__(self, model_name: str, horizon: int, channels: int, power_index: int,) -> None:
         super().__init__()
         self.model_name = model_name.lower()
         self.horizon = int(horizon)
@@ -70,47 +54,24 @@ class NoFutureWeatherModel(nn.Module):
         self.revin = RevIN(channels)
 
         if self.model_name in ("patchmlp", "patchmlpallfeatures"):
-            config = PatchConfig(
-                seq_len=project_config.HISTORY_STEPS,
-                pred_len=self.horizon,
-            )
-            self.patch_embedding = Emb(
-                project_config.HISTORY_STEPS,
-                config.d_model,
-                patch_len=PATCH_LENGTHS,
-            )
+            config = PatchConfig(seq_len=project_config.HISTORY_STEPS, pred_len=self.horizon,)
+            self.patch_embedding = Emb(project_config.HISTORY_STEPS, config.d_model, patch_len=PATCH_LENGTHS,)
             self.patch_decomposition = PatchDecomposition(13)
             self.seasonal_encoders = nn.ModuleList()
             self.trend_encoders = nn.ModuleList()
             for _ in range(config.e_layers):
-                self.seasonal_encoders.append(
-                    PatchEncoder(config.d_model, channels)
-                )
-                self.trend_encoders.append(
-                    PatchEncoder(config.d_model, channels)
-                )
-            self.output_projection = nn.Linear(
-                config.d_model,
-                self.horizon,
-                bias=True,
-            )
+                self.seasonal_encoders.append(PatchEncoder(config.d_model, channels))
+                self.trend_encoders.append(PatchEncoder(config.d_model, channels))
+            self.output_projection = nn.Linear(config.d_model, self.horizon, bias=True,)
             self.turbine_embedding = nn.Embedding(16, config.d_model)
         elif self.model_name == "dlinear":
-            self.backbone = DLinear(
-                project_config.HISTORY_STEPS,
-                self.horizon,
-                channels,
-            )
+            self.backbone = DLinear(project_config.HISTORY_STEPS, self.horizon, channels,)
             self.turbine_embedding = nn.Embedding(16, channels)
         elif self.model_name in (
             "dlinearallfeatures",
             "dlinearcorrelatedfeatures",
         ):
-            self.backbone = DLinear(
-                project_config.HISTORY_STEPS,
-                self.horizon,
-                channels,
-            )
+            self.backbone = DLinear(project_config.HISTORY_STEPS, self.horizon, channels,)
             self.turbine_embedding = nn.Embedding(16, channels)
             self.feature_projection = nn.Linear(channels, 1)
             nn.init.zeros_(self.feature_projection.weight)
@@ -120,11 +81,7 @@ class NoFutureWeatherModel(nn.Module):
 
         nn.init.normal_(self.turbine_embedding.weight, mean=0.0, std=0.02)
 
-    def encode_patches(
-        self,
-        normalized_past: torch.Tensor,
-        turbine_id: torch.Tensor,
-    ) -> torch.Tensor:
+    def encode_patches(self, normalized_past: torch.Tensor, turbine_id: torch.Tensor,) -> torch.Tensor:
         # 重建和功率预测共用时序编码与变量交互
         embedded = self.patch_embedding(normalized_past.permute(0, 2, 1))
         turbine_embedding = self.turbine_embedding(turbine_id).unsqueeze(1)
@@ -139,11 +96,7 @@ class NoFutureWeatherModel(nn.Module):
         encoded = seasonal + trend
         return encoded
 
-    def forward(
-        self,
-        past: torch.Tensor,
-        turbine_id: torch.Tensor,
-    ) -> torch.Tensor:
+    def forward(self, past: torch.Tensor, turbine_id: torch.Tensor,) -> torch.Tensor:
         # 在 RevIN 域内编码时序和风机身份
         normalized_past, instance_mean, instance_std = self.revin.normalize(past)
 
@@ -156,11 +109,7 @@ class NoFutureWeatherModel(nn.Module):
             normalized_forecast = self.backbone(encoder_input)
 
         # 将预测恢复到历史输入的特征尺度
-        forecast = self.revin.denormalize(
-            normalized_forecast,
-            instance_mean,
-            instance_std,
-        )
+        forecast = self.revin.denormalize(normalized_forecast, instance_mean, instance_std,)
         if self.model_name in (
             "dlinearallfeatures",
             "dlinearcorrelatedfeatures",

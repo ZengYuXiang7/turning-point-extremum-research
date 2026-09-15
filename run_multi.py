@@ -8,13 +8,8 @@ from tasks.multi_turbine.configuration import parse_args
 
 
 # 模型元数据和动态模块缓存统一留在项目目录。
-os.environ.setdefault(
-    "HF_HOME", str(PROJECT_ROOT / "models" / "pretrained" / ".hf-cache")
-)
-os.environ.setdefault(
-    "HF_MODULES_CACHE",
-    str(PROJECT_ROOT / "models" / "pretrained" / ".hf-modules"),
-)
+os.environ.setdefault("HF_HOME", str(PROJECT_ROOT / "models" / "pretrained" / ".hf-cache"))
+os.environ.setdefault("HF_MODULES_CACHE", str(PROJECT_ROOT / "models" / "pretrained" / ".hf-modules"),)
 
 
 def main():
@@ -29,12 +24,7 @@ def main():
     if args.mode == "train":
         from tasks.multi_turbine.visualization import visualize_checkpoint_predictions
 
-        visualize_checkpoint_predictions(
-            Path(args.run_dir),
-            args.visualization_split,
-            args.visualization_seed,
-            args.visualization_device,
-        )
+        visualize_checkpoint_predictions(Path(args.run_dir), args.visualization_split, args.visualization_seed, args.visualization_device,)
 
 
 if __name__ == "__main__":

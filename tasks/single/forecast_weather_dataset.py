@@ -30,21 +30,9 @@ class ForecastWeatherDataset(Dataset):
         )
         target_end = target_start + self.horizon * project_config.POINT_STRIDE_STEPS
         start_ns = int(series.times[target_start])
-        past = np.ascontiguousarray(
-            series.scaled[
-                history_start:target_start:project_config.POINT_STRIDE_STEPS,
-                WEATHER_INDICES,
-            ]
-        )
-        weather = np.zeros(
-            (self.horizon, len(WEATHER_INDICES)), dtype=np.float32
-        )
-        target = np.ascontiguousarray(
-            series.scaled[
-                target_start:target_end:project_config.POINT_STRIDE_STEPS,
-                WEATHER_INDICES,
-            ]
-        )
+        past = np.ascontiguousarray(series.scaled[ history_start:target_start:project_config.POINT_STRIDE_STEPS, WEATHER_INDICES, ])
+        weather = np.zeros((self.horizon, len(WEATHER_INDICES)), dtype=np.float32)
+        target = np.ascontiguousarray(series.scaled[ target_start:target_end:project_config.POINT_STRIDE_STEPS, WEATHER_INDICES, ])
 
         return (
             torch.from_numpy(past),
@@ -55,9 +43,7 @@ class ForecastWeatherDataset(Dataset):
         )
 
 
-def make_forecast_weather_loaders(
-    horizon: int, batch_size: int, num_workers: int
-):
+def make_forecast_weather_loaders(horizon: int, batch_size: int, num_workers: int):
     repository = Repository()
     train_dataset = ForecastWeatherDataset(repository, "train", horizon)
     val_dataset = ForecastWeatherDataset(repository, "val", horizon)
@@ -67,12 +53,5 @@ def make_forecast_weather_loaders(
         "val": val_dataset,
         "test": test_dataset,
     }
-    loaders = make_loaders(
-        train_dataset,
-        val_dataset,
-        test_dataset,
-        batch_size,
-        num_workers,
-        shuffle_train=True,
-    )
+    loaders = make_loaders(train_dataset, val_dataset, test_dataset, batch_size, num_workers, shuffle_train=True,)
     return repository, datasets, loaders

@@ -21,9 +21,7 @@ TOP_PREDICTOR_COUNT = 20
 
 def plot_feature_importance(predictor_frame, output_root):
     # 绘制固定Top20预测字段的三类重要性
-    display_frame = predictor_frame.head(TOP_PREDICTOR_COUNT).sort_values(
-        "综合排名", ascending=False,
-    )
+    display_frame = predictor_frame.head(TOP_PREDICTOR_COUNT).sort_values("综合排名", ascending=False,)
     labels = display_frame["字段"].to_numpy()
     label_font = font_manager.FontProperties(fname=FONT_PATH, size=10)
     title_font = font_manager.FontProperties(fname=FONT_PATH, size=13)
@@ -50,10 +48,7 @@ def plot_feature_importance(predictor_frame, output_root):
         axis.tick_params(axis="x", labelsize=10)
         for tick_label in axis.get_yticklabels():
             tick_label.set_fontproperties(label_font)
-    figure.suptitle(
-        "16台风机 LightGBM Top20预测字段",
-        fontproperties=font_manager.FontProperties(fname=FONT_PATH, size=18),
-    )
+    figure.suptitle("16台风机 LightGBM Top20预测字段", fontproperties=font_manager.FontProperties(fname=FONT_PATH, size=18),)
     figure.tight_layout()
     png_path = output_root / "feature_importance_top20.png"
     pdf_path = output_root / "feature_importance_top20.pdf"
@@ -94,19 +89,12 @@ def plot_top_k_curve(top_k_frame, output_root):
     labels = error_labels + accuracy_labels
     error_axis.legend(handles, labels, prop=legend_font, loc="best")
     figure.tight_layout()
-    figure.savefig(
-        output_root / "top_k_validation_curve.png", dpi=260,
-        bbox_inches="tight", facecolor="white",
-    )
-    figure.savefig(
-        output_root / "top_k_validation_curve.pdf",
-        bbox_inches="tight", facecolor="white",
-    )
+    figure.savefig(output_root / "top_k_validation_curve.png", dpi=260, bbox_inches="tight", facecolor="white",)
+    figure.savefig(output_root / "top_k_validation_curve.pdf", bbox_inches="tight", facecolor="white",)
     plt.close(figure)
 
 
-def write_summary(predictor_frame, top_k_frame, best_top_k, train_times,
-                  valid_times, sample_count, elapsed_seconds, args, output_root):
+def write_summary(predictor_frame, top_k_frame, best_top_k, train_times, valid_times, sample_count, elapsed_seconds, args, output_root):
     # 写出筛选协议、Top-K结果和固定Top20
     train_start = pd.to_datetime(np.min(train_times), unit="s")
     train_end = pd.to_datetime(np.max(train_times), unit="s")
@@ -131,12 +119,7 @@ def write_summary(predictor_frame, top_k_frame, best_top_k, train_times,
     ]
     for row_index in range(len(top_k_frame)):
         row = top_k_frame.iloc[row_index]
-        lines.append(
-            f"| {int(row['Top-K预测字段数'])} | {int(row['实际输入字段数'])} | "
-            f"{int(row['展开输入维数'])} | {int(row['最佳迭代轮数'])} | "
-            f"{row['总体验证RMSE_kW']:.4f} | {row['Macro16验证RMSE_kW']:.4f} | "
-            f"{row['Macro16验证Acc30_percent']:.4f} |"
-        )
+        lines.append(f"| {int(row['Top-K预测字段数'])} | {int(row['实际输入字段数'])} | " f"{int(row['展开输入维数'])} | {int(row['最佳迭代轮数'])} | " f"{row['总体验证RMSE_kW']:.4f} | {row['Macro16验证RMSE_kW']:.4f} | " f"{row['Macro16验证Acc30_percent']:.4f} |")
 
     # 固定交付排名前20个预测字段
     lines.extend(["", f"Macro16验证RMSE最优为Top-{best_top_k}。", "", "## 固定Top20", "",
@@ -145,10 +128,7 @@ def write_summary(predictor_frame, top_k_frame, best_top_k, train_times,
     top20_frame = predictor_frame.head(TOP_PREDICTOR_COUNT)
     for row_index in range(len(top20_frame)):
         row = top20_frame.iloc[row_index]
-        lines.append(
-            f"| {int(row['综合排名'])} | {row['字段']} | {row['Gain占比']:.6f} | "
-            f"{row['SHAP占比']:.6f} | {int(row['置换后RMSE上升风机数'])} |"
-        )
+        lines.append(f"| {int(row['综合排名'])} | {row['字段']} | {row['Gain占比']:.6f} | " f"{row['SHAP占比']:.6f} | {int(row['置换后RMSE上升风机数'])} |")
     lines.extend([
         "", "## 解释边界", "",
         "- 同一Top20将交给15分钟DLinear长度实验；该列表由1小时历史预测下一15分钟任务选出。",
@@ -159,10 +139,7 @@ def write_summary(predictor_frame, top_k_frame, best_top_k, train_times,
     summary_path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def write_feature_artifacts(lag_frame, all_feature_frame, predictor_frame,
-                            turbine_frame, top_k_frame, turbine_top_k_frame,
-                            best_top_k, train_times, valid_times, sample_count,
-                            elapsed_seconds, args, output_root):
+def write_feature_artifacts(lag_frame, all_feature_frame, predictor_frame, turbine_frame, top_k_frame, turbine_top_k_frame, best_top_k, train_times, valid_times, sample_count, elapsed_seconds, args, output_root):
     # 保存分析表、固定Top20列表、图件与总结
     lag_frame.to_csv(output_root / "lag_feature_importance.csv", index=False, encoding="utf-8-sig")
     all_feature_frame.to_csv(output_root / "all_feature_importance.csv", index=False, encoding="utf-8-sig")
@@ -170,21 +147,14 @@ def write_feature_artifacts(lag_frame, all_feature_frame, predictor_frame,
     turbine_frame.to_csv(output_root / "per_turbine_permutation_importance.csv", index=False, encoding="utf-8-sig")
     top_k_frame.to_csv(output_root / "top_k_validation_metrics.csv", index=False, encoding="utf-8-sig")
     turbine_top_k_frame.to_csv(output_root / "top_k_validation_metrics_by_turbine.csv", index=False, encoding="utf-8-sig")
-    predictor_frame.head(best_top_k).to_csv(
-        output_root / "validation_best_predictors.csv", index=False, encoding="utf-8-sig",
-    )
+    predictor_frame.head(best_top_k).to_csv(output_root / "validation_best_predictors.csv", index=False, encoding="utf-8-sig",)
     top20_frame = predictor_frame.head(TOP_PREDICTOR_COUNT).copy()
     top20_frame.to_csv(output_root / "top20_predictors.csv", index=False, encoding="utf-8-sig")
     top20_features = top20_frame["字段"].tolist()
     top20_features.append(POWER_COLUMN)
     top20_path = output_root / "top20_features.json"
-    top20_path.write_text(
-        json.dumps(top20_features, ensure_ascii=False, indent=2), encoding="utf-8",
-    )
+    top20_path.write_text(json.dumps(top20_features, ensure_ascii=False, indent=2), encoding="utf-8",)
     plot_feature_importance(predictor_frame, output_root)
     plot_top_k_curve(top_k_frame, output_root)
-    write_summary(
-        predictor_frame, top_k_frame, best_top_k, train_times, valid_times,
-        sample_count, elapsed_seconds, args, output_root,
-    )
+    write_summary(predictor_frame, top_k_frame, best_top_k, train_times, valid_times, sample_count, elapsed_seconds, args, output_root,)
     return top20_path

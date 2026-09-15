@@ -94,12 +94,7 @@ def main():
             axis.set_xlabel("时刻", fontproperties=label_font)
 
     # 标注所选日数据口径并导出单页PDF。
-    figure.suptitle(
-        f"16台风机2026年5月24日功率（原始10秒粒度，无降采样/聚合）\n"
-        f"每台 {len(power_values):,} 个样本；统一纵轴 {lower_bound:.0f}–{upper_bound:.0f} kW",
-        fontproperties=title_font,
-        y=0.995,
-    )
+    figure.suptitle(f"16台风机2026年5月24日功率（原始10秒粒度，无降采样/聚合）\n" f"每台 {len(power_values):,} 个样本；统一纵轴 {lower_bound:.0f}–{upper_bound:.0f} kW", fontproperties=title_font, y=0.995,)
     figure.tight_layout(rect=(0, 0, 1, 0.95))
     figure.savefig(PDF_PATH, dpi=200, bbox_inches="tight", facecolor="white")
     plt.close(figure)

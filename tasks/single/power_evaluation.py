@@ -18,13 +18,7 @@ def collect_predictions(args, model, loaders, device, model_uses_future_weather)
     truths = []
     turbines = []
     target_starts = []
-    batches = tqdm(
-        loaders["test"],
-        total=len(loaders["test"]),
-        desc="test",
-        disable=args.show_progress == 0,
-        leave=False,
-    )
+    batches = tqdm(loaders["test"], total=len(loaders["test"]), desc="test", disable=args.show_progress == 0, leave=False,)
     no_future_weather = args.scenario == "NoFutureWeather"
     with torch.no_grad():
         for batch in batches:
@@ -36,11 +30,7 @@ def collect_predictions(args, model, loaders, device, model_uses_future_weather)
             turbine_gpu = turbine_id.to(device, non_blocking=True)
             if model_uses_future_weather:
                 future_weather = future_weather.to(device, non_blocking=True)
-            with torch.autocast(
-                device_type=device.type,
-                dtype=torch.bfloat16,
-                enabled=device.type == "cuda",
-            ):
+            with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == "cuda",):
                 if model_uses_future_weather:
                     prediction = model(past, future_weather, turbine_gpu)
                 else:
@@ -72,37 +62,12 @@ def restore_power(repository, prediction_scaled, truth_scaled, turbine_ids):
     return prediction, truth
 
 
-def evaluate_power(
-    args,
-    model,
-    repository,
-    datasets,
-    loaders,
-    device,
-    checkpoint,
-    contract_checkpoint,
-    best_epoch,
-    best_mse,
-    best_acc30,
-    history,
-    pretraining,
-    model_uses_future_weather,
-):
+def evaluate_power(args, model, repository, datasets, loaders, device, checkpoint, contract_checkpoint, best_epoch, best_mse, best_acc30, history, pretraining, model_uses_future_weather,):
     # Single 功率程序保存预测、指标和正式结果契约。
     run_dir = Path(args.run_dir)
-    prediction_scaled, truth_scaled, turbine_ids, starts = collect_predictions(
-        args, model, loaders, device, model_uses_future_weather
-    )
-    prediction, truth = restore_power(
-        repository, prediction_scaled, truth_scaled, turbine_ids
-    )
-    np.savez_compressed(
-        run_dir / "test_predictions.npz",
-        prediction=prediction.astype(np.float32),
-        truth=truth.astype(np.float32),
-        turbine_id=(turbine_ids + 1).astype(np.int16),
-        target_start_ns=starts,
-    )
+    prediction_scaled, truth_scaled, turbine_ids, starts = collect_predictions(args, model, loaders, device, model_uses_future_weather)
+    prediction, truth = restore_power(repository, prediction_scaled, truth_scaled, turbine_ids)
+    np.savez_compressed(run_dir / "test_predictions.npz", prediction=prediction.astype(np.float32), truth=truth.astype(np.float32), turbine_id=(turbine_ids + 1).astype(np.int16), target_start_ns=starts,)
     metrics = metric_bundle(prediction, truth, turbine_ids)
     save_metrics(run_dir, metrics)
     curve_overall = metrics[0]
@@ -111,17 +76,7 @@ def evaluate_power(
     record_path = ""
     if args.result_name:
         if args.mode == "train":
-            report_path, record_path = write_power_result_contract(
-                args,
-                repository,
-                datasets,
-                contract_checkpoint,
-                best_epoch,
-                best_mse,
-                history,
-                curve_overall,
-                pretraining,
-            )
+            report_path, record_path = write_power_result_contract(args, repository, datasets, contract_checkpoint, best_epoch, best_mse, history, curve_overall, pretraining,)
         else:
             report_path = result_report_path(args.dataset_name, args.result_name)
             record_path = result_record_path(args.dataset_name, args.result_name)
@@ -188,9 +143,5 @@ def evaluate_power(
     display_checkpoint = checkpoint.resolve()
     if display_checkpoint.is_relative_to(PROJECT_ROOT):
         display_checkpoint = display_checkpoint.relative_to(PROJECT_ROOT)
-    print(
-        f"[Power] {args.mode} best_epoch={best_epoch} {metric_text} "
-        f"checkpoint={display_checkpoint.as_posix()}",
-        flush=True,
-    )
+    print(f"[Power] {args.mode} best_epoch={best_epoch} {metric_text} " f"checkpoint={display_checkpoint.as_posix()}", flush=True,)
     return final

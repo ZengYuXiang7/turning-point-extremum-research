@@ -8,16 +8,7 @@ def format_ns_date(timestamp_ns: int) -> str:
     return f"{date[:4]}年{date[5:7]}月{date[8:10]}日"
 
 
-def print_data_summary(
-    datasets,
-    loaders,
-    horizon_steps,
-    window_stride_steps,
-    no_future_weather,
-    weather_task,
-    oracle,
-    predicted_weather,
-):
+def print_data_summary(datasets, loaders, horizon_steps, window_stride_steps, no_future_weather, weather_task, oracle, predicted_weather,):
     # 确定当前场景的输入与监督特征
     past_features = datasets["train"].repository.feature_names
     target_features = ["风机-P"]
@@ -53,10 +44,7 @@ def print_data_summary(
         window_stride_steps * project_config.POINT_INTERVAL_SECONDS / 60
     )
     point_minutes = project_config.POINT_INTERVAL_SECONDS / 60
-    print(
-        f"历史长度={history_minutes:g}分钟 预测长度={horizon_minutes:g}分钟 "
-        f"滑窗步长={window_stride_minutes:g}分钟\n"
-    )
+    print(f"历史长度={history_minutes:g}分钟 预测长度={horizon_minutes:g}分钟 " f"滑窗步长={window_stride_minutes:g}分钟\n")
     print("各切分的预测目标覆盖范围、样本占比和 Batch 张量形状：")
 
     total_windows = sum(len(datasets[split]) for split in ("train", "val", "test"))
@@ -89,30 +77,14 @@ def print_data_summary(
             batch_items.append(dataset[sample_index])
 
         batch = loader.collate_fn(batch_items)
-        print(
-            f"  {split:<5}  目标时间={format_ns_date(target_start_ns)} 至 "
-            f"{format_ns_date(target_end_ns)}（约 {coverage_days:.1f} 天）  "
-            f"时间占比={time_ratio:.2f}%  窗口={len(dataset):,}（{window_ratio:.2f}%）  "
-            f"batches={len(loader):,}"
-        )
+        print(f"  {split:<5}  目标时间={format_ns_date(target_start_ns)} 至 " f"{format_ns_date(target_end_ns)}（约 {coverage_days:.1f} 天）  " f"时间占比={time_ratio:.2f}%  窗口={len(dataset):,}（{window_ratio:.2f}%）  " f"batches={len(loader):,}")
 
         if no_future_weather:
             past, target, turbine_id, target_start = batch
-            print(
-                f"    输入  past shape={list(past.shape)}  "
-                f"turbine_id shape={list(turbine_id.shape)}"
-            )
+            print(f"    输入  past shape={list(past.shape)}  " f"turbine_id shape={list(turbine_id.shape)}")
         else:
             past, future_weather, target, turbine_id, target_start = batch
-            print(
-                f"    输入  past shape={list(past.shape)}  "
-                f"future_weather shape={list(future_weather.shape)}  "
-                f"turbine_id shape={list(turbine_id.shape)}"
-            )
+            print(f"    输入  past shape={list(past.shape)}  " f"future_weather shape={list(future_weather.shape)}  " f"turbine_id shape={list(turbine_id.shape)}")
 
-        print(
-            f"    标签  target shape={list(target.shape)}  "
-            f"时间维={horizon_steps}点（每点{point_minutes:g}分钟）",
-            flush=True,
-        )
+        print(f"    标签  target shape={list(target.shape)}  " f"时间维={horizon_steps}点（每点{point_minutes:g}分钟）", flush=True,)
         print('')

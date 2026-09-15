@@ -50,11 +50,7 @@ def build_single_turbine_windows(repository, split: str, horizon: int):
             alignment_steps = alignment_ns // EXPECTED_DELTA_NS
             first_history_start = left + alignment_steps
 
-            for history_start in range(
-                first_history_start,
-                right - raw_span_steps + 1,
-                window_stride_base_steps,
-            ):
+            for history_start in range(first_history_start, right - raw_span_steps + 1, window_stride_base_steps,):
                 target_start_index = (
                     history_start
                     + project_config.HISTORY_STEPS
@@ -107,11 +103,7 @@ def build_multi_turbine_windows(repository, split: str, horizon: int):
         alignment_steps = alignment_ns // EXPECTED_DELTA_NS
         first_history_start = left + alignment_steps
 
-        for history_start in range(
-            first_history_start,
-            right - raw_span_steps + 1,
-            window_stride_base_steps,
-        ):
+        for history_start in range(first_history_start, right - raw_span_steps + 1, window_stride_base_steps,):
             target_start_index = (
                 history_start
                 + project_config.HISTORY_STEPS

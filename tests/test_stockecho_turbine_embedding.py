@@ -23,9 +23,7 @@ class TestStockEchoTurbineEmbedding(unittest.TestCase):
             model.turbine_embedding.weight.normal_(mean=0.0, std=0.5)
             prediction_with_identity = model(past, turbine_id)
 
-        self.assertFalse(
-            torch.allclose(prediction_without_identity, prediction_with_identity)
-        )
+        self.assertFalse(torch.allclose(prediction_without_identity, prediction_with_identity))
 
     def test_forecast_loss_trains_embedding_relation(self):
         torch.manual_seed(2026)

@@ -38,10 +38,7 @@ class SummaryDataset(Dataset):
         past = torch.zeros(HISTORY_STEPS, len(HISTORY_COLUMNS))
         target = torch.zeros(1)
         turbine_id = torch.tensor(0, dtype=torch.long)
-        target_start_ns = torch.tensor(
-            self.start_ns + index * POINT_INTERVAL_SECONDS * 1_000_000_000,
-            dtype=torch.long,
-        )
+        target_start_ns = torch.tensor(self.start_ns + index * POINT_INTERVAL_SECONDS * 1_000_000_000, dtype=torch.long,)
         return past, target, turbine_id, target_start_ns
 
 
@@ -61,14 +58,8 @@ class TestNoFutureWeather(unittest.TestCase):
 
         with (
             patch("config.HISTORY_STEPS", history_steps),
-            patch(
-                "config.POINT_STRIDE_STEPS",
-                point_stride_steps,
-            ),
-            patch(
-                "tasks.single.no_future_dataset.build_single_turbine_windows",
-                return_value=[(0, 0)],
-            ),
+            patch("config.POINT_STRIDE_STEPS", point_stride_steps,),
+            patch("tasks.single.no_future_dataset.build_single_turbine_windows", return_value=[(0, 0)],),
         ):
             dataset = NoFutureWeatherDataset(repository, "train", horizon_steps)
             past, target, _, target_start_ns = dataset[0]
@@ -103,10 +94,7 @@ class TestNoFutureWeather(unittest.TestCase):
         series = SimpleNamespace(times=times, scaled=scaled)
         repository = SimpleNamespace(series=[series], power_index=POWER_INDEX)
 
-        with patch(
-            "tasks.single.no_future_dataset.build_single_turbine_windows",
-            return_value=[(0, 0)],
-        ):
+        with patch("tasks.single.no_future_dataset.build_single_turbine_windows", return_value=[(0, 0)],):
             dataset = NoFutureWeatherDataset(repository, "train", 1)
 
         past, target, turbine_id, target_start_ns = dataset[0]
@@ -116,9 +104,7 @@ class TestNoFutureWeather(unittest.TestCase):
         selected_indices = np.arange(HISTORY_STEPS) * POINT_STRIDE_STEPS
         np.testing.assert_array_equal(past[:, 0].numpy(), selected_indices)
         self.assertEqual(target.item(), HISTORY_STEPS * POINT_STRIDE_STEPS)
-        self.assertEqual(
-            target_start_ns.item(), times[HISTORY_STEPS * POINT_STRIDE_STEPS]
-        )
+        self.assertEqual(target_start_ns.item(), times[HISTORY_STEPS * POINT_STRIDE_STEPS])
 
     def test_summary_has_no_future_weather_shape(self):
         train_start = np.datetime64("2026-06-01T00:00:00", "ns").astype(np.int64)
@@ -135,40 +121,16 @@ class TestNoFutureWeather(unittest.TestCase):
 
         output = io.StringIO()
         with redirect_stdout(output):
-            print_data_summary(
-                datasets,
-                loaders,
-                horizon_steps=1,
-                window_stride_steps=1,
-                no_future_weather=True,
-                weather_task=False,
-                oracle=False,
-                predicted_weather=False,
-            )
+            print_data_summary(datasets, loaders, horizon_steps=1, window_stride_steps=1, no_future_weather=True, weather_task=False, oracle=False, predicted_weather=False,)
 
         text = output.getvalue()
-        self.assertIn(
-            f"输入  past shape=[2, {HISTORY_STEPS}, 19]  turbine_id shape=[2]",
-            text,
-        )
+        self.assertIn(f"输入  past shape=[2, {HISTORY_STEPS}, 19]  turbine_id shape=[2]", text,)
         self.assertNotIn("future_weather shape", text)
-        self.assertIn(
-            f"历史长度={HISTORY_STEPS * POINT_INTERVAL_SECONDS / 60:g}分钟 "
-            "预测长度=15分钟 滑窗步长=15分钟",
-            text,
-        )
-        self.assertIn(
-            f"时间维=1点（每点{POINT_INTERVAL_SECONDS / 60:g}分钟）",
-            text,
-        )
+        self.assertIn(f"历史长度={HISTORY_STEPS * POINT_INTERVAL_SECONDS / 60:g}分钟 " "预测长度=15分钟 滑窗步长=15分钟", text,)
+        self.assertIn(f"时间维=1点（每点{POINT_INTERVAL_SECONDS / 60:g}分钟）", text,)
 
     def test_dlinear_history_only_forward(self):
-        model = NoFutureWeatherModel(
-            "DLinear",
-            horizon=1,
-            channels=len(HISTORY_COLUMNS),
-            power_index=POWER_INDEX,
-        )
+        model = NoFutureWeatherModel("DLinear", horizon=1, channels=len(HISTORY_COLUMNS), power_index=POWER_INDEX,)
         past = torch.randn(2, HISTORY_STEPS, len(HISTORY_COLUMNS))
         turbine_id = torch.tensor([0, 1], dtype=torch.long)
 
@@ -177,12 +139,7 @@ class TestNoFutureWeather(unittest.TestCase):
         self.assertEqual(tuple(prediction.shape), (2, 1))
 
     def test_patchmlp_history_only_forward(self):
-        model = NoFutureWeatherModel(
-            "PatchMLP",
-            horizon=1,
-            channels=len(HISTORY_COLUMNS),
-            power_index=POWER_INDEX,
-        )
+        model = NoFutureWeatherModel("PatchMLP", horizon=1, channels=len(HISTORY_COLUMNS), power_index=POWER_INDEX,)
         past = torch.randn(2, HISTORY_STEPS, len(HISTORY_COLUMNS))
         turbine_id = torch.tensor([0, 1], dtype=torch.long)
 
@@ -200,12 +157,7 @@ class TestNoFutureWeather(unittest.TestCase):
         torch.testing.assert_close(restored, past)
 
     def test_dlinear_uses_turbine_embedding(self):
-        model = NoFutureWeatherModel(
-            "DLinear",
-            horizon=1,
-            channels=len(HISTORY_COLUMNS),
-            power_index=POWER_INDEX,
-        )
+        model = NoFutureWeatherModel("DLinear", horizon=1, channels=len(HISTORY_COLUMNS), power_index=POWER_INDEX,)
         history = torch.randn(1, HISTORY_STEPS, len(HISTORY_COLUMNS))
         past = history.expand(2, -1, -1).clone()
         turbine_id = torch.tensor([0, 1], dtype=torch.long)
@@ -218,12 +170,7 @@ class TestNoFutureWeather(unittest.TestCase):
         self.assertFalse(torch.allclose(prediction[0], prediction[1]))
 
     def test_patchmlp_uses_turbine_embedding(self):
-        model = NoFutureWeatherModel(
-            "PatchMLP",
-            horizon=1,
-            channels=len(HISTORY_COLUMNS),
-            power_index=POWER_INDEX,
-        )
+        model = NoFutureWeatherModel("PatchMLP", horizon=1, channels=len(HISTORY_COLUMNS), power_index=POWER_INDEX,)
         model.eval()
         history = torch.randn(1, HISTORY_STEPS, len(HISTORY_COLUMNS))
         past = history.expand(2, -1, -1).clone()
@@ -232,22 +179,13 @@ class TestNoFutureWeather(unittest.TestCase):
         with torch.no_grad():
             model.turbine_embedding.weight.zero_()
             embedding_width = model.turbine_embedding.embedding_dim
-            model.turbine_embedding.weight[1] = torch.linspace(
-                -1.0,
-                1.0,
-                embedding_width,
-            )
+            model.turbine_embedding.weight[1] = torch.linspace(-1.0, 1.0, embedding_width,)
             prediction = model(past, turbine_id)
 
         self.assertFalse(torch.allclose(prediction[0], prediction[1]))
 
     def test_dlinear_all_features_mixes_non_power_channel(self):
-        model = NoFutureWeatherModel(
-            "DLinearAllFeatures",
-            horizon=1,
-            channels=len(HISTORY_COLUMNS),
-            power_index=POWER_INDEX,
-        )
+        model = NoFutureWeatherModel("DLinearAllFeatures", horizon=1, channels=len(HISTORY_COLUMNS), power_index=POWER_INDEX,)
         model.eval()
         history = torch.randn(1, HISTORY_STEPS, len(HISTORY_COLUMNS))
         past = history.expand(2, -1, -1).clone()
@@ -265,12 +203,7 @@ class TestNoFutureWeather(unittest.TestCase):
 
     def test_dlinear_correlated_features_forward(self):
         power_index = CORRELATED_HISTORY_COLUMNS.index("风机-P")
-        model = NoFutureWeatherModel(
-            "DLinearCorrelatedFeatures",
-            horizon=1,
-            channels=len(CORRELATED_HISTORY_COLUMNS),
-            power_index=power_index,
-        )
+        model = NoFutureWeatherModel("DLinearCorrelatedFeatures", horizon=1, channels=len(CORRELATED_HISTORY_COLUMNS), power_index=power_index,)
         past = torch.randn(2, HISTORY_STEPS, len(CORRELATED_HISTORY_COLUMNS))
         turbine_id = torch.tensor([0, 1], dtype=torch.long)
 

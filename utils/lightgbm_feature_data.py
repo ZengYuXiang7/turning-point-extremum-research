@@ -50,12 +50,7 @@ def build_supervised_samples(data, columns, args):
     window_stride_seconds = args.window_stride_steps * args.point_interval_seconds
     alignment_seconds = (-first_target_timestamp) % window_stride_seconds
     first_history_start = alignment_seconds // BASE_INTERVAL_SECONDS
-    history_starts = np.arange(
-        first_history_start,
-        len(data) - target_offset,
-        args.window_stride_steps * point_stride,
-        dtype=np.int64,
-    )
+    history_starts = np.arange(first_history_start, len(data) - target_offset, args.window_stride_steps * point_stride, dtype=np.int64,)
     history_offsets = np.arange(args.history_steps, dtype=np.int64) * point_stride
     history_indices = history_starts[:, None] + history_offsets[None, :]
     target_indices = history_starts + target_offset
@@ -145,9 +140,7 @@ def select_balanced_importance_sample(valid_values, valid_targets, valid_ids, ar
 
     for turbine_id in range(1, TURBINE_COUNT + 1):
         turbine_indices = np.flatnonzero(valid_ids == turbine_id)
-        turbine_selected = random_generator.choice(
-            turbine_indices, size=samples_per_turbine, replace=False,
-        )
+        turbine_selected = random_generator.choice(turbine_indices, size=samples_per_turbine, replace=False,)
         left = (turbine_id - 1) * samples_per_turbine
         right = turbine_id * samples_per_turbine
         selected_indices[left:right] = turbine_selected

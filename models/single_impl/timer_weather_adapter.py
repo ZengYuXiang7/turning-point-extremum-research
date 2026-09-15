@@ -14,12 +14,7 @@ class MultivariatePatchAdapter(nn.Module):
         super().__init__()
         self.patch_length = int(patch_length)
         self.input_norm = nn.LayerNorm(int(channels))
-        self.projection = nn.Conv1d(
-            in_channels=int(channels),
-            out_channels=int(hidden_size),
-            kernel_size=self.patch_length,
-            stride=self.patch_length,
-        )
+        self.projection = nn.Conv1d(in_channels=int(channels), out_channels=int(hidden_size), kernel_size=self.patch_length, stride=self.patch_length,)
         self.activation = nn.GELU()
         self.output_norm = nn.LayerNorm(int(hidden_size))
 
@@ -54,13 +49,7 @@ class PatchForecastHead(nn.Module):
 
     def __init__(self, hidden_size: int, bottleneck: int, patch_length: int) -> None:
         super().__init__()
-        self.network = nn.Sequential(
-            nn.LayerNorm(int(hidden_size)),
-            nn.Linear(int(hidden_size), int(bottleneck)),
-            nn.GELU(),
-            nn.Dropout(0.1),
-            nn.Linear(int(bottleneck), int(patch_length)),
-        )
+        self.network = nn.Sequential(nn.LayerNorm(int(hidden_size)), nn.Linear(int(hidden_size), int(bottleneck)), nn.GELU(), nn.Dropout(0.1), nn.Linear(int(bottleneck), int(patch_length)),)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         return self.network(hidden_states)

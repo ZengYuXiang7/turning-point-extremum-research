@@ -17,23 +17,8 @@ def make_relation(turbine_count: int) -> torch.Tensor:
 
 
 class TestMultiTurbine(unittest.TestCase):
-    def make_model(
-        self,
-        channels: int = 5,
-        horizon: int = 3,
-        use_dtw_prior: bool = False,
-    ) -> MultiTurbineBackbone:
-        model = MultiTurbineBackbone(
-            channels=channels,
-            history_steps=8,
-            horizon=horizon,
-            relation_weight=make_relation(4),
-            use_dtw_prior=use_dtw_prior,
-            hidden_dim=16,
-            depth=1,
-            heads=4,
-            dropout=0.0,
-        )
+    def make_model(self, channels: int = 5, horizon: int = 3, use_dtw_prior: bool = False,) -> MultiTurbineBackbone:
+        model = MultiTurbineBackbone(channels=channels, history_steps=8, horizon=horizon, relation_weight=make_relation(4), use_dtw_prior=use_dtw_prior, hidden_dim=16, depth=1, heads=4, dropout=0.0,)
         return model
 
     def test_multi_turbine_forecasts_the_joint_panel(self):
@@ -90,24 +75,8 @@ class TestMultiTurbine(unittest.TestCase):
         changed_panel = panel.copy()
         changed_panel[:, 12:, -1] += 1000.0
 
-        first_relation = build_wind_dtw_relation(
-            panel,
-            train_end_index=12,
-            power_index=4,
-            top_k=2,
-            candidate_k=3,
-            downsample=8,
-            band=2,
-        )
-        second_relation = build_wind_dtw_relation(
-            changed_panel,
-            train_end_index=12,
-            power_index=4,
-            top_k=2,
-            candidate_k=3,
-            downsample=8,
-            band=2,
-        )
+        first_relation = build_wind_dtw_relation(panel, train_end_index=12, power_index=4, top_k=2, candidate_k=3, downsample=8, band=2,)
+        second_relation = build_wind_dtw_relation(changed_panel, train_end_index=12, power_index=4, top_k=2, candidate_k=3, downsample=8, band=2,)
 
         torch.testing.assert_close(first_relation, second_relation)
 

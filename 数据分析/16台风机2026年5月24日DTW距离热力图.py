@@ -55,33 +55,14 @@ def main():
         turbine_labels[turbine_index] = f"风机{turbine_id:02d}"
 
     # 在30分钟Sakoe-Chiba窗口内计算全量标准化功率DTW距离
-    distance_matrix = dtw.distance_matrix_fast(
-        power_series,
-        compact=False,
-        parallel=True,
-        use_pruning=True,
-        only_triu=False,
-        window=MAX_WARP_SAMPLES + 1,
-    )
+    distance_matrix = dtw.distance_matrix_fast(power_series, compact=False, parallel=True, use_pruning=True, only_triu=False, window=MAX_WARP_SAMPLES + 1,)
     normalized_distance_matrix = distance_matrix / np.sqrt(DAY_SAMPLE_COUNT)
-    distance_frame = pd.DataFrame(
-        normalized_distance_matrix,
-        index=turbine_labels,
-        columns=turbine_labels,
-    )
+    distance_frame = pd.DataFrame(normalized_distance_matrix, index=turbine_labels, columns=turbine_labels,)
     distance_frame.to_csv(DISTANCE_PATH, encoding="utf-8-sig", float_format="%.6f")
 
     # 按距离由小到大保存120个不重复风机对
     upper_rows, upper_columns = np.triu_indices(TURBINE_COUNT, k=1)
-    pair_frame = pd.DataFrame(
-        {
-            "风机A": turbine_labels[upper_rows],
-            "风机B": turbine_labels[upper_columns],
-            "长度归一化DTW距离": normalized_distance_matrix[
-                upper_rows, upper_columns
-            ],
-        }
-    )
+    pair_frame = pd.DataFrame({ "风机A": turbine_labels[upper_rows], "风机B": turbine_labels[upper_columns], "长度归一化DTW距离": normalized_distance_matrix[ upper_rows, upper_columns ], })
     pair_frame = pair_frame.sort_values("长度归一化DTW距离").reset_index(drop=True)
     pair_frame.to_csv(PAIR_PATH, index=False, encoding="utf-8-sig", float_format="%.6f")
 
@@ -91,34 +72,15 @@ def main():
     tick_font = font_manager.FontProperties(fname=FONT_PATH, size=12)
     note_font = font_manager.FontProperties(fname=FONT_PATH, size=11)
     figure, axis = plt.subplots(figsize=(13.5, 11.5))
-    image = axis.imshow(
-        normalized_distance_matrix,
-        cmap="YlOrRd",
-        vmin=0,
-        vmax=np.max(normalized_distance_matrix),
-        interpolation="nearest",
-        aspect="equal",
-    )
+    image = axis.imshow(normalized_distance_matrix, cmap="YlOrRd", vmin=0, vmax=np.max(normalized_distance_matrix), interpolation="nearest", aspect="equal",)
 
     axis.set_xticks(np.arange(TURBINE_COUNT))
     axis.set_yticks(np.arange(TURBINE_COUNT))
-    axis.set_xticklabels(
-        turbine_labels,
-        rotation=45,
-        ha="right",
-        rotation_mode="anchor",
-        fontproperties=tick_font,
-    )
+    axis.set_xticklabels(turbine_labels, rotation=45, ha="right", rotation_mode="anchor", fontproperties=tick_font,)
     axis.set_yticklabels(turbine_labels, fontproperties=tick_font)
     axis.set_xlabel("风机编号", fontproperties=axis_font, labelpad=10)
     axis.set_ylabel("风机编号", fontproperties=axis_font, labelpad=10)
-    axis.set_title(
-        "16台风机2026年5月24日功率DTW距离\n"
-        "全天原始10秒粒度（每台8640点，无降采样）｜"
-        "单台z-score标准化｜最大时间错位30分钟",
-        fontproperties=title_font,
-        pad=18,
-    )
+    axis.set_title("16台风机2026年5月24日功率DTW距离\n" "全天原始10秒粒度（每台8640点，无降采样）｜" "单台z-score标准化｜最大时间错位30分钟", fontproperties=title_font, pad=18,)
 
     # 标注每个风机对的长度归一化距离
     annotation_boundary = np.max(normalized_distance_matrix) * 0.58
@@ -128,23 +90,11 @@ def main():
             text_color = "white"
             if distance < annotation_boundary:
                 text_color = "#202020"
-            axis.text(
-                column_index,
-                row_index,
-                f"{distance:.2f}",
-                ha="center",
-                va="center",
-                color=text_color,
-                fontsize=9.5,
-            )
+            axis.text(column_index, row_index, f"{distance:.2f}", ha="center", va="center", color=text_color, fontsize=9.5,)
 
     # 添加距离标尺并导出高清产物
     color_bar = figure.colorbar(image, ax=axis, fraction=0.046, pad=0.04)
-    color_bar.set_label(
-        "长度归一化DTW距离（越小越相似）",
-        fontproperties=axis_font,
-        labelpad=12,
-    )
+    color_bar.set_label("长度归一化DTW距离（越小越相似）", fontproperties=axis_font, labelpad=12,)
     for tick_label in color_bar.ax.get_yticklabels():
         tick_label.set_fontproperties(note_font)
 

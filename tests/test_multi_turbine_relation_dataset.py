@@ -18,11 +18,7 @@ class TestMultiTurbineRelationDataset(unittest.TestCase):
         feature_count = 3
         series = []
         for turbine_index in range(16):
-            scaled = np.full(
-                (sequence_length, feature_count),
-                turbine_index,
-                dtype=np.float32,
-            )
+            scaled = np.full((sequence_length, feature_count), turbine_index, dtype=np.float32,)
             series.append(SimpleNamespace(scaled=scaled))
         repository = SimpleNamespace(series=series)
 
@@ -31,9 +27,7 @@ class TestMultiTurbineRelationDataset(unittest.TestCase):
         self.assertEqual(tuple(panel.shape), (16, sequence_length, feature_count))
         for turbine_index in range(16):
             np.testing.assert_array_equal(panel[turbine_index], turbine_index)
-            self.assertTrue(
-                np.shares_memory(repository.series[turbine_index].scaled, panel)
-            )
+            self.assertTrue(np.shares_memory(repository.series[turbine_index].scaled, panel))
 
     def test_history_dataset_slices_the_joint_panel(self):
         history_steps = 3
@@ -41,44 +35,20 @@ class TestMultiTurbineRelationDataset(unittest.TestCase):
         point_stride_steps = 2
         sequence_length = (history_steps + horizon_steps) * point_stride_steps
         feature_count = len(HISTORY_COLUMNS)
-        panel = np.arange(
-            16 * sequence_length * feature_count,
-            dtype=np.float32,
-        ).reshape(16, sequence_length, feature_count)
+        panel = np.arange(16 * sequence_length * feature_count, dtype=np.float32,).reshape(16, sequence_length, feature_count)
         times = np.arange(sequence_length, dtype=np.int64) * 10_000_000_000
         series = []
         for turbine_index in range(16):
-            turbine_series = SimpleNamespace(
-                times=times,
-                scaled=panel[turbine_index],
-            )
+            turbine_series = SimpleNamespace(times=times, scaled=panel[turbine_index],)
             series.append(turbine_series)
-        repository = SimpleNamespace(
-            panel=panel,
-            times=times,
-            series=series,
-            power_index=feature_count - 1,
-        )
+        repository = SimpleNamespace(panel=panel, times=times, series=series, power_index=feature_count - 1,)
 
         with (
-            patch(
-                "config.HISTORY_STEPS",
-                history_steps,
-            ),
-            patch(
-                "config.POINT_STRIDE_STEPS",
-                point_stride_steps,
-            ),
-            patch(
-                "tasks.multi_turbine.dataset.build_multi_turbine_windows",
-                return_value=[0],
-            ),
+            patch("config.HISTORY_STEPS", history_steps,),
+            patch("config.POINT_STRIDE_STEPS", point_stride_steps,),
+            patch("tasks.multi_turbine.dataset.build_multi_turbine_windows", return_value=[0],),
         ):
-            dataset = MultiTurbineNoFutureWeatherDataset(
-                repository,
-                "train",
-                horizon_steps,
-            )
+            dataset = MultiTurbineNoFutureWeatherDataset(repository, "train", horizon_steps,)
             past, target, turbine_id, target_start_ns = dataset[0]
 
         target_start = history_steps * point_stride_steps
@@ -100,44 +70,20 @@ class TestMultiTurbineRelationDataset(unittest.TestCase):
         point_stride_steps = 2
         sequence_length = (history_steps + horizon_steps) * point_stride_steps
         feature_count = len(HISTORY_COLUMNS)
-        panel = np.arange(
-            16 * sequence_length * feature_count,
-            dtype=np.float32,
-        ).reshape(16, sequence_length, feature_count)
+        panel = np.arange(16 * sequence_length * feature_count, dtype=np.float32,).reshape(16, sequence_length, feature_count)
         times = np.arange(sequence_length, dtype=np.int64) * 10_000_000_000
         series = []
         for turbine_index in range(16):
-            turbine_series = SimpleNamespace(
-                times=times,
-                scaled=panel[turbine_index],
-            )
+            turbine_series = SimpleNamespace(times=times, scaled=panel[turbine_index],)
             series.append(turbine_series)
-        repository = SimpleNamespace(
-            panel=panel,
-            times=times,
-            series=series,
-            power_index=feature_count - 1,
-        )
+        repository = SimpleNamespace(panel=panel, times=times, series=series, power_index=feature_count - 1,)
 
         with (
-            patch(
-                "config.HISTORY_STEPS",
-                history_steps,
-            ),
-            patch(
-                "config.POINT_STRIDE_STEPS",
-                point_stride_steps,
-            ),
-            patch(
-                "tasks.multi_turbine.dataset.build_multi_turbine_windows",
-                return_value=[0],
-            ),
+            patch("config.HISTORY_STEPS", history_steps,),
+            patch("config.POINT_STRIDE_STEPS", point_stride_steps,),
+            patch("tasks.multi_turbine.dataset.build_multi_turbine_windows", return_value=[0],),
         ):
-            dataset = MultiTurbineOracleFutureWeatherDataset(
-                repository,
-                "train",
-                horizon_steps,
-            )
+            dataset = MultiTurbineOracleFutureWeatherDataset(repository, "train", horizon_steps,)
             past, weather, target, turbine_id, target_start_ns = dataset[0]
 
         target_start = history_steps * point_stride_steps
@@ -147,10 +93,7 @@ class TestMultiTurbineRelationDataset(unittest.TestCase):
         ][:, :, WEATHER_INDICES]
         np.testing.assert_array_equal(weather.numpy(), expected_weather)
         self.assertEqual(tuple(past.shape), (16, history_steps, feature_count))
-        self.assertEqual(
-            tuple(weather.shape),
-            (16, horizon_steps, len(WEATHER_INDICES)),
-        )
+        self.assertEqual(tuple(weather.shape), (16, horizon_steps, len(WEATHER_INDICES)),)
         self.assertEqual(tuple(target.shape), (16, horizon_steps))
         np.testing.assert_array_equal(turbine_id.numpy(), np.arange(16))
         self.assertEqual(target_start_ns.item(), times[target_start])

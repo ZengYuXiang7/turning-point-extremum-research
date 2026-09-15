@@ -29,17 +29,8 @@ class NoFutureWeatherDataset(Dataset):
         )
         target_end = target_start + self.horizon * project_config.POINT_STRIDE_STEPS
         start_ns = int(series.times[target_start])
-        past = np.ascontiguousarray(
-            series.scaled[
-                history_start:target_start:project_config.POINT_STRIDE_STEPS
-            ]
-        )
-        target = np.ascontiguousarray(
-            series.scaled[
-                target_start:target_end:project_config.POINT_STRIDE_STEPS,
-                self.repository.power_index,
-            ]
-        )
+        past = np.ascontiguousarray(series.scaled[ history_start:target_start:project_config.POINT_STRIDE_STEPS ])
+        target = np.ascontiguousarray(series.scaled[ target_start:target_end:project_config.POINT_STRIDE_STEPS, self.repository.power_index, ])
 
         return (
             torch.from_numpy(past),
@@ -49,17 +40,8 @@ class NoFutureWeatherDataset(Dataset):
         )
 
 
-def make_no_future_weather_loaders(
-    horizon: int,
-    batch_size: int,
-    num_workers: int,
-    all_features: bool = False,
-    correlated_features: bool = False,
-):
-    repository = Repository(
-        all_features=all_features,
-        correlated_features=correlated_features,
-    )
+def make_no_future_weather_loaders(horizon: int, batch_size: int, num_workers: int, all_features: bool = False, correlated_features: bool = False,):
+    repository = Repository(all_features=all_features, correlated_features=correlated_features,)
     train_dataset = NoFutureWeatherDataset(repository, "train", horizon)
     val_dataset = NoFutureWeatherDataset(repository, "val", horizon)
     test_dataset = NoFutureWeatherDataset(repository, "test", horizon)
@@ -68,12 +50,5 @@ def make_no_future_weather_loaders(
         "val": val_dataset,
         "test": test_dataset,
     }
-    loaders = make_loaders(
-        train_dataset,
-        val_dataset,
-        test_dataset,
-        batch_size,
-        num_workers,
-        shuffle_train=True,
-    )
+    loaders = make_loaders(train_dataset, val_dataset, test_dataset, batch_size, num_workers, shuffle_train=True,)
     return repository, datasets, loaders

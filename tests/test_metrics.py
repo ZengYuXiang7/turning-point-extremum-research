@@ -28,13 +28,7 @@ class TestDTWMetrics(unittest.TestCase):
 
     def test_dtw_batch_reductions_support_torch_tensors(self):
         y_true = torch.zeros((2, 4), dtype=torch.float32)
-        y_pred = torch.tensor(
-            [
-                [0, 0, 0, 0],
-                [1, 1, 1, 1],
-            ],
-            dtype=torch.float32,
-        )
+        y_pred = torch.tensor([ [0, 0, 0, 0], [1, 1, 1, 1], ], dtype=torch.float32,)
 
         per_sequence = dtw(y_true, y_pred, reduction="none")
         mean_value = dtw(y_true, y_pred, reduction="mean")
@@ -44,20 +38,8 @@ class TestDTWMetrics(unittest.TestCase):
         self.assertAlmostEqual(mean_value, 0.5)
 
     def test_batch_reductions_support_torch_tensors(self):
-        y_true = torch.tensor(
-            [
-                [1, 2, 3, 2, 1],
-                [0, 1, 3, 1, 0],
-            ],
-            dtype=torch.float32,
-        )
-        y_pred = torch.tensor(
-            [
-                [1, 2, 3, 2, 1],
-                [0, 0, 1, 3, 1],
-            ],
-            dtype=torch.float32,
-        )
+        y_true = torch.tensor([ [1, 2, 3, 2, 1], [0, 1, 3, 1, 0], ], dtype=torch.float32,)
+        y_pred = torch.tensor([ [1, 2, 3, 2, 1], [0, 0, 1, 3, 1], ], dtype=torch.float32,)
 
         per_sequence = tdi(y_true, y_pred, reduction="none")
         mean_value = tdi(y_true, y_pred, reduction="mean")

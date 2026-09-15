@@ -20,11 +20,7 @@ def pretrain_power_encoder(args, model, repository, datasets, loaders, device, r
         if history_time >= repository.train_end:
             validation_indices.append(index)
     validation_subset = Subset(validation_dataset, validation_indices)
-    validation_loader = DataLoader(
-        validation_subset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.num_workers, pin_memory=device.type == "cuda",
-        drop_last=False,
-    )
+    validation_loader = DataLoader(validation_subset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=device.type == "cuda", drop_last=False,)
 
     # 第一阶段保存独立检查点与完整重建历史
     checkpoint_path = run_dir / "pretrain_checkpoint.pt"
@@ -44,32 +40,15 @@ def pretrain_power_encoder(args, model, repository, datasets, loaders, device, r
     if device.type == "cuda":
         cuda_devices.append(device.index)
     with torch.random.fork_rng(devices=cuda_devices):
-        pretrainer = MaskedTokenPretraining(
-            model.backbone,
-            args.history_steps,
-        ).to(device)
+        pretrainer = MaskedTokenPretraining(model.backbone, args.history_steps,).to(device)
         
-        optimizer = torch.optim.AdamW(
-            pretrainer.parameters(), lr=args.pretrain_learning_rate,
-        )
-        scheduler, scheduler_steps_per_batch = build_pretrain_scheduler(
-            args, optimizer, len(loaders["train"]),
-        )
+        optimizer = torch.optim.AdamW(pretrainer.parameters(), lr=args.pretrain_learning_rate,)
+        scheduler, scheduler_steps_per_batch = build_pretrain_scheduler(args, optimizer, len(loaders["train"]),)
         
         for epoch in range(1, args.pretrain_epochs + 1):
             epoch_started = time.time()
-            train_mse = run_masked_epoch(
-                pretrainer, loaders["train"], optimizer, device,
-                args.mae_mask_ratio,
-                args.seed + epoch, True, args.show_progress, epoch,
-                scheduler, scheduler_steps_per_batch,
-            )
-            val_mse = run_masked_epoch(
-                pretrainer, validation_loader, optimizer, device,
-                args.mae_mask_ratio,
-                args.seed, False, args.show_progress, epoch,
-                scheduler, scheduler_steps_per_batch,
-            )
+            train_mse = run_masked_epoch(pretrainer, loaders["train"], optimizer, device, args.mae_mask_ratio, args.seed + epoch, True, args.show_progress, epoch, scheduler, scheduler_steps_per_batch,)
+            val_mse = run_masked_epoch(pretrainer, validation_loader, optimizer, device, args.mae_mask_ratio, args.seed, False, args.show_progress, epoch, scheduler, scheduler_steps_per_batch,)
 
             # 硬重启按batch更新，其余调度器按epoch更新
             if scheduler_steps_per_batch is False:
@@ -81,22 +60,7 @@ def pretrain_power_encoder(args, model, repository, datasets, loaders, device, r
                 best_mse = val_mse
                 best_epoch = epoch
                 wait = 0
-                torch.save(
-                    {
-                        "contract_version": CONTRACT_VERSION,
-                        "dataset": args.dataset_name,
-                        "result_name": args.result_name,
-                        "model_name": args.model,
-                        "stage": "masked_history_reconstruction",
-                        "seed": args.seed,
-                        "epoch": epoch,
-                        "validation_mse_scaled": val_mse,
-                        "model_state": pretrainer.state_dict(),
-                        "config": vars(args).copy(),
-                        "target_transform": "per_turbine_train_standard_scaler",
-                    },
-                    checkpoint_path,
-                )
+                torch.save({ "contract_version": CONTRACT_VERSION, "dataset": args.dataset_name, "result_name": args.result_name, "model_name": args.model, "stage": "masked_history_reconstruction", "seed": args.seed, "epoch": epoch, "validation_mse_scaled": val_mse, "model_state": pretrainer.state_dict(), "config": vars(args).copy(), "target_transform": "per_turbine_train_standard_scaler", }, checkpoint_path,)
             else:
                 wait += 1
 
@@ -107,19 +71,8 @@ def pretrain_power_encoder(args, model, repository, datasets, loaders, device, r
             if epoch == args.pretrain_epochs or improved:
                 log_epoch = True
             if log_epoch or early_stop:
-                print(
-                    f"[Pretrain] epoch={epoch}/{args.pretrain_epochs} "
-                    f"train_MSE={train_mse:.6f} val_MSE={val_mse:.6f} "
-                    f"best={best_mse:.6f}@{best_epoch} saved={improved} "
-                    f"early_stop={early_stop} seconds={seconds:.2f}",
-                    flush=True,
-                )
-            history.append({
-                "epoch": epoch, "train_mse_scaled": train_mse,
-                "validation_mse_scaled": val_mse, "seconds": seconds,
-                "learning_rate": optimizer.param_groups[0]["lr"],
-                "saved": improved,
-            })
+                print(f"[Pretrain] epoch={epoch}/{args.pretrain_epochs} " f"train_MSE={train_mse:.6f} val_MSE={val_mse:.6f} " f"best={best_mse:.6f}@{best_epoch} saved={improved} " f"early_stop={early_stop} seconds={seconds:.2f}", flush=True,)
+            history.append({ "epoch": epoch, "train_mse_scaled": train_mse, "validation_mse_scaled": val_mse, "seconds": seconds, "learning_rate": optimizer.param_groups[0]["lr"], "saved": improved, })
             history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")
             if early_stop:
                 break
@@ -155,9 +108,5 @@ def pretrain_power_encoder(args, model, repository, datasets, loaders, device, r
     display_checkpoint_path = checkpoint_path.resolve()
     if display_checkpoint_path.is_relative_to(PROJECT_ROOT):
         display_checkpoint_path = display_checkpoint_path.relative_to(PROJECT_ROOT)
-    print(
-        f"[Pretrain] transferred_epoch={best_epoch} "
-        f"val_MSE={best_mse:.6f} checkpoint={display_checkpoint_path}",
-        flush=True,
-    )
+    print(f"[Pretrain] transferred_epoch={best_epoch} " f"val_MSE={best_mse:.6f} checkpoint={display_checkpoint_path}", flush=True,)
     return summary

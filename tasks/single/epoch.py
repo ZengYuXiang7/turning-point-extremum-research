@@ -4,22 +4,7 @@ from tqdm import tqdm
 
 from utils.acc30_loss import Acc30BoundaryLoss
 
-def run_epoch(
-    model,
-    loader,
-    device,
-    optimizer,
-    objective,
-    dbloss_weight,
-    train,
-    power_means,
-    power_stds,
-    show_progress,
-    epoch,
-    no_future_weather,
-    model_uses_future_weather,
-    weather_task,
-):
+def run_epoch(model, loader, device, optimizer, objective, dbloss_weight, train, power_means, power_stds, show_progress, epoch, no_future_weather, model_uses_future_weather, weather_task,):
     # 单个 epoch 的前向与可选反传；bf16 AMP，clip_norm=1.0
     model.train(train)
     total_loss = 0.0
@@ -35,13 +20,7 @@ def run_epoch(
         context = torch.no_grad()
         stage = "val"
 
-    batches = tqdm(
-        loader,
-        total=len(loader),
-        desc=f"epoch {epoch} {stage}",
-        disable=show_progress == 0,
-        leave=False,
-    )
+    batches = tqdm(loader, total=len(loader), desc=f"epoch {epoch} {stage}", disable=show_progress == 0, leave=False,)
 
     with context:
         for batch in batches:
@@ -63,11 +42,7 @@ def run_epoch(
             if train:
                 optimizer.zero_grad(set_to_none=True)
 
-            with torch.autocast(
-                device_type=device.type,
-                dtype=torch.bfloat16,
-                enabled=device.type == "cuda",
-            ):
+            with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == "cuda",):
                 if model_uses_future_weather:
                     prediction = model(past, future_weather, turbine_id)
                 else:
@@ -106,11 +81,7 @@ def run_epoch(
                     strict_passed += int(passed.sum().item())
 
             # 验证仅保留点误差指标。
-            batches.set_postfix(
-                loss=total_loss / points,
-                mse=total_mse / points,
-                refresh=False,
-            )
+            batches.set_postfix(loss=total_loss / points, mse=total_mse / points, refresh=False,)
 
     if weather_task:
         strict_acc30 = 0.0

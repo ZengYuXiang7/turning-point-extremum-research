@@ -18,9 +18,7 @@ from tasks.multi_turbine.visualization_plot import save_prediction_figure
 
 
 os.environ["HF_HOME"] = str(PROJECT_ROOT / "models" / "pretrained" / ".hf-cache")
-os.environ["HF_MODULES_CACHE"] = str(
-    PROJECT_ROOT / "models" / "pretrained" / ".hf-modules"
-)
+os.environ["HF_MODULES_CACHE"] = str(PROJECT_ROOT / "models" / "pretrained" / ".hf-modules")
 
 FIGURE_OUTPUT_DIRECTORY = PROJECT_ROOT / "output" / "figs"
 DISPLAY_TURBINE_COUNT = 10
@@ -45,11 +43,7 @@ def collect_panel_curves(repository, dataset, model, selection_seed: int, device
         power_means[turbine_index] = series.power_mean
         power_stds[turbine_index] = series.power_std
 
-    history_scaled = past[
-        :DISPLAY_TURBINE_COUNT,
-        :,
-        repository.power_index,
-    ].numpy()
+    history_scaled = past[ :DISPLAY_TURBINE_COUNT, :, repository.power_index, ].numpy()
     truth_scaled = target[:DISPLAY_TURBINE_COUNT].numpy()
     prediction_scaled = (
         prediction_scaled[:DISPLAY_TURBINE_COUNT].float().cpu().numpy()
@@ -71,12 +65,7 @@ def collect_panel_curves(repository, dataset, model, selection_seed: int, device
     )
 
 
-def visualize_checkpoint_predictions(
-    run_dir: Path,
-    split: str,
-    selection_seed: int,
-    device_name: str,
-) -> None:
+def visualize_checkpoint_predictions(run_dir: Path, split: str, selection_seed: int, device_name: str,) -> None:
     # 按多风机任务配置重建联合面板 Dataset 和 Model。
     checkpoint_path = (run_dir / "best_checkpoint.pt").resolve()
     device = torch.device(device_name)
@@ -85,24 +74,11 @@ def visualize_checkpoint_predictions(
     project_config.apply_point_interval_seconds(config["point_interval_seconds"])
     project_config.apply_history_steps(config["history_steps"])
     project_config.apply_window_stride_steps(config["window_stride_steps"])
-    repository, dataset, model, _ = build_checkpoint_components(
-        config,
-        split,
-        device,
-    )
+    repository, dataset, model, _ = build_checkpoint_components(config, split, device,)
     model, checkpoint_epoch = load_checkpoint_model(model, config, checkpoint)
 
     # 保存完整16台输入和前10台曲线，明确记录唯一联合窗口索引。
-    (
-        input_past,
-        input_turbine_id,
-        history_power_kw,
-        truth_power_kw,
-        prediction_power_kw,
-        display_turbine_id,
-        target_start_ns,
-        panel_dataset_index,
-    ) = collect_panel_curves(repository, dataset, model, selection_seed, device)
+    (input_past, input_turbine_id, history_power_kw, truth_power_kw, prediction_power_kw, display_turbine_id, target_start_ns, panel_dataset_index,) = collect_panel_curves(repository, dataset, model, selection_seed, device)
     artifact_stem = (
         f"{config['dataset_name']}__{config['result_name']}__{split}"
         f"__selection_seed_{selection_seed}__epoch_{checkpoint_epoch}"
@@ -111,52 +87,11 @@ def visualize_checkpoint_predictions(
     sample_archive_path = FIGURE_OUTPUT_DIRECTORY / f"{artifact_stem}__panel_inputs.npz"
     output_pdf_path = FIGURE_OUTPUT_DIRECTORY / f"{artifact_stem}__prediction_curves.pdf"
     output_png_path = FIGURE_OUTPUT_DIRECTORY / f"{artifact_stem}__prediction_curves.png"
-    np.savez_compressed(
-        sample_archive_path,
-        input_past=input_past,
-        input_turbine_id=input_turbine_id,
-        history_power_kw=history_power_kw,
-        truth_power_kw=truth_power_kw,
-        prediction_power_kw=prediction_power_kw,
-        display_turbine_id=display_turbine_id,
-        target_start_ns=np.asarray(target_start_ns, dtype=np.int64),
-        panel_dataset_index=np.asarray(panel_dataset_index, dtype=np.int64),
-        selection_seed=np.asarray(selection_seed, dtype=np.int64),
-        checkpoint_epoch=np.asarray(checkpoint_epoch, dtype=np.int64),
-    )
-    save_prediction_figure(
-        output_pdf_path,
-        output_png_path,
-        config,
-        split,
-        selection_seed,
-        checkpoint_epoch,
-        panel_dataset_index,
-        history_power_kw,
-        truth_power_kw,
-        prediction_power_kw,
-        display_turbine_id,
-    )
+    np.savez_compressed(sample_archive_path, input_past=input_past, input_turbine_id=input_turbine_id, history_power_kw=history_power_kw, truth_power_kw=truth_power_kw, prediction_power_kw=prediction_power_kw, display_turbine_id=display_turbine_id, target_start_ns=np.asarray(target_start_ns, dtype=np.int64), panel_dataset_index=np.asarray(panel_dataset_index, dtype=np.int64), selection_seed=np.asarray(selection_seed, dtype=np.int64), checkpoint_epoch=np.asarray(checkpoint_epoch, dtype=np.int64),)
+    save_prediction_figure(output_pdf_path, output_png_path, config, split, selection_seed, checkpoint_epoch, panel_dataset_index, history_power_kw, truth_power_kw, prediction_power_kw, display_turbine_id,)
 
     # 输出统一使用项目相对路径。
     display_checkpoint_path = checkpoint_path
     if display_checkpoint_path.is_relative_to(PROJECT_ROOT):
         display_checkpoint_path = display_checkpoint_path.relative_to(PROJECT_ROOT)
-    print(
-        json.dumps(
-            {
-                "event": "multi_turbine_visualization_saved",
-                "checkpoint": display_checkpoint_path.as_posix(),
-                "sample_input": sample_archive_path.relative_to(PROJECT_ROOT).as_posix(),
-                "pdf": output_pdf_path.relative_to(PROJECT_ROOT).as_posix(),
-                "png": output_png_path.relative_to(PROJECT_ROOT).as_posix(),
-                "split": split,
-                "selection_seed": selection_seed,
-                "panel_dataset_index": panel_dataset_index,
-                "model_input_turbines": int(input_past.shape[0]),
-                "display_turbines": display_turbine_id.tolist(),
-            },
-            ensure_ascii=False,
-        ),
-        flush=True,
-    )
+    print(json.dumps({ "event": "multi_turbine_visualization_saved", "checkpoint": display_checkpoint_path.as_posix(), "sample_input": sample_archive_path.relative_to(PROJECT_ROOT).as_posix(), "pdf": output_pdf_path.relative_to(PROJECT_ROOT).as_posix(), "png": output_png_path.relative_to(PROJECT_ROOT).as_posix(), "split": split, "selection_seed": selection_seed, "panel_dataset_index": panel_dataset_index, "model_input_turbines": int(input_past.shape[0]), "display_turbines": display_turbine_id.tolist(), }, ensure_ascii=False,), flush=True,)

@@ -16,18 +16,9 @@ class WeatherForecastModel(nn.Module):
         self.model_name = model_name.lower()
         self.horizon = int(horizon)
         # 当前级联壳只用 DLinear；其它名字同样走 DLinear 通道数=天气维
-        self.backbone = DLinear(
-            project_config.HISTORY_STEPS,
-            self.horizon,
-            len(WEATHER_COLUMNS),
-        )
+        self.backbone = DLinear(project_config.HISTORY_STEPS, self.horizon, len(WEATHER_COLUMNS),)
 
-    def forward(
-        self,
-        past_weather: torch.Tensor,
-        weather_unused: torch.Tensor,
-        turbine_id: torch.Tensor,
-    ) -> torch.Tensor:
+    def forward(self, past_weather: torch.Tensor, weather_unused: torch.Tensor, turbine_id: torch.Tensor,) -> torch.Tensor:
         # backbone 先出原始多步预报
         forecast = self.backbone(past_weather)
 

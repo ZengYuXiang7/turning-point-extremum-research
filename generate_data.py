@@ -114,33 +114,17 @@ def build_slots(member_paths, source_indices, progress):
         futures = []
         for member_index in range(member_count):
             member_path = member_paths[member_index]
-            future = executor.submit(
-                scan_member,
-                member_index,
-                member_path,
-                source_indices,
-            )
+            future = executor.submit(scan_member, member_index, member_path, source_indices,)
             futures.append(future)
 
         for future in as_completed(futures):
-            (
-                member_index,
-                turbine_index,
-                raw_row_count,
-                column_count,
-                member_missing,
-            ) = future.result()
+            (member_index, turbine_index, raw_row_count, column_count, member_missing,) = future.result()
             turbine_indices[member_index] = turbine_index
             row_counts[member_index] = raw_row_count
             missing_columns |= member_missing
             member_path = member_paths[member_index]
             display_member_path = member_path.relative_to(ROOT)
-            print(
-                f"[{member_index + 1}/{member_count}] {display_member_path}: "
-                f"raw_shape=({raw_row_count}, {column_count}), "
-                f"raw_points={raw_row_count}",
-                flush=True,
-            )
+            print(f"[{member_index + 1}/{member_count}] {display_member_path}: " f"raw_shape=({raw_row_count}, {column_count}), " f"raw_points={raw_row_count}", flush=True,)
             progress.update(1)
 
     slot_starts = np.empty(member_count, dtype=np.int64)
@@ -162,33 +146,19 @@ def create_output_arrays(building_root, sequence_lengths, feature_dim):
         turbine_id = turbine_index + 1
         data_path = building_root / f"turbine_{turbine_id:02d}.npy"
         sequence_length = int(sequence_lengths[turbine_index])
-        data_array = np.lib.format.open_memmap(
-            data_path,
-            mode="w+",
-            dtype=np.float64,
-            shape=(sequence_length, output_dim),
-        )
+        data_array = np.lib.format.open_memmap(data_path, mode="w+", dtype=np.float64, shape=(sequence_length, output_dim),)
         data_array.flush()
         data_paths.append(data_path)
 
     return data_paths
 
 
-def write_member(
-    member_index,
-    member_path,
-    source_indices,
-    time_index,
-    slot_start,
-    data_path,
-):
+def write_member(member_index, member_path, source_indices, time_index, slot_start, data_path,):
     # 并行解码一个日文件，并写入原始10秒时刻的目标槽位。
     workbook = xlrd.open_workbook(member_path, on_demand=True)
     sheet = workbook.sheet_by_index(0)
     raw_row_count = sheet.nrows - 1
-    times = np.asarray(
-        sheet.col_values(time_index, start_rowx=1), dtype="datetime64[s]"
-    ).astype(np.int64)
+    times = np.asarray(sheet.col_values(time_index, start_rowx=1), dtype="datetime64[s]").astype(np.int64)
     values = np.empty((raw_row_count, len(source_indices) + 1), dtype=np.float64)
     values[:, 0] = times
 
@@ -208,15 +178,7 @@ def write_member(
     return member_index
 
 
-def write_members(
-    member_paths,
-    source_indices,
-    time_index,
-    turbine_indices,
-    slot_starts,
-    data_paths,
-    progress,
-):
+def write_members(member_paths, source_indices, time_index, turbine_indices, slot_starts, data_paths, progress,):
     # 多进程写入不同槽位，任务完成先后不影响数组中的时间顺序。
     with ProcessPoolExecutor(max_workers=WORKER_COUNT) as executor:
         futures = []
@@ -224,15 +186,7 @@ def write_members(
             member_path = member_paths[member_index]
             turbine_index = turbine_indices[member_index]
             data_path = data_paths[turbine_index]
-            future = executor.submit(
-                write_member,
-                member_index,
-                member_path,
-                source_indices,
-                time_index,
-                slot_starts[member_index],
-                data_path,
-            )
+            future = executor.submit(write_member, member_index, member_path, source_indices, time_index, slot_starts[member_index], data_path,)
             futures.append(future)
 
         for future in as_completed(futures):
@@ -267,9 +221,7 @@ def publish_output(building_root):
 def save_feature_names(building_root, feature_names):
     # 列名与二维数组同序，最后一项固定为目标。
     columns_path = building_root / "columns.json"
-    columns_path.write_text(
-        json.dumps(feature_names, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    columns_path.write_text(json.dumps(feature_names, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def main():
@@ -281,17 +233,9 @@ def main():
     source_indices, feature_names = select_feature_columns(headers)
     time_index = headers.index("时间")
 
-    progress = tqdm(
-        total=2 * len(member_paths),
-        desc=f"构建{BASE_INTERVAL_SECONDS}秒 NPY",
-        unit="file",
-    )
+    progress = tqdm(total=2 * len(member_paths), desc=f"构建{BASE_INTERVAL_SECONDS}秒 NPY", unit="file",)
     turbine_indices, slot_starts, sequence_lengths, missing_columns = (
-        build_slots(
-            member_paths,
-            source_indices,
-            progress,
-        )
+        build_slots(member_paths, source_indices, progress,)
     )
     source_indices = np.asarray(source_indices, dtype=np.int64)
     feature_names = np.asarray(feature_names)
@@ -302,38 +246,21 @@ def main():
     for feature_index in range(len(feature_names)):
         print(f"[{feature_index + 1}] {feature_names[feature_index]}")
 
-    data_paths = create_output_arrays(
-        building_root, sequence_lengths, len(feature_names)
-    )
+    data_paths = create_output_arrays(building_root, sequence_lengths, len(feature_names))
     save_feature_names(building_root, feature_names)
-    write_members(
-        member_paths,
-        source_indices,
-        time_index,
-        turbine_indices,
-        slot_starts,
-        data_paths,
-        progress,
-    )
+    write_members(member_paths, source_indices, time_index, turbine_indices, slot_starts, data_paths, progress,)
     progress.close()
 
     sort_turbine_arrays(data_paths)
     publish_output(building_root)
     elapsed_seconds = time.time() - started
     display_output_root = OUTPUT_ROOT.relative_to(ROOT)
-    print(
-        f"完成: {display_output_root}，风机数={TURBINE_COUNT}，"
-        f"底层间隔={BASE_INTERVAL_SECONDS}秒，矩阵维度={len(feature_names) + 1}，"
-        f"耗时 {elapsed_seconds:.1f} 秒",
-        flush=True,
-    )
+    print(f"完成: {display_output_root}，风机数={TURBINE_COUNT}，" f"底层间隔={BASE_INTERVAL_SECONDS}秒，矩阵维度={len(feature_names) + 1}，" f"耗时 {elapsed_seconds:.1f} 秒", flush=True,)
 
 
 if __name__ == "__main__":
     # 数据固定构建为10秒底层序列，仅保留标准帮助入口。
-    argument_parser = argparse.ArgumentParser(
-        description="从原始 XLS 构建固定10秒间隔的 processed NPY"
-    )
+    argument_parser = argparse.ArgumentParser(description="从原始 XLS 构建固定10秒间隔的 processed NPY")
     argument_parser.parse_args()
 
     main()

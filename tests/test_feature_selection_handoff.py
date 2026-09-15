@@ -18,9 +18,7 @@ class TestFeatureSelectionHandoff(unittest.TestCase):
         self.root = Path(self.temporary_directory.name)
         columns_path = DATASET_ROOT / "columns.json"
         self.source_columns = json.loads(columns_path.read_text(encoding="utf-8"))
-        (self.root / "columns.json").write_text(
-            json.dumps(self.source_columns, ensure_ascii=False), encoding="utf-8",
-        )
+        (self.root / "columns.json").write_text(json.dumps(self.source_columns, ensure_ascii=False), encoding="utf-8",)
         row_count = 10
         timestamps = np.arange(row_count, dtype=np.float64)[:, None]
         row_values = np.arange(row_count, dtype=np.float64)[:, None]
@@ -46,9 +44,7 @@ class TestFeatureSelectionHandoff(unittest.TestCase):
         feature_names = predictor_names.copy()
         feature_names.append("风机-P")
         feature_path = self.root / "top20_features.json"
-        feature_path.write_text(
-            json.dumps(feature_names, ensure_ascii=False), encoding="utf-8",
-        )
+        feature_path.write_text(json.dumps(feature_names, ensure_ascii=False), encoding="utf-8",)
 
         repository = self.build_repository(str(feature_path))
 

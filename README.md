@@ -25,11 +25,13 @@ StockEcho 位于 `models/multi_turbine_impl/stockecho.py`，包括因果时序�
 项目迁入的 PSTR-Net 设计：每台风机先经过
 State-Conditioned Pattern Expert（残差时序 CNN 与六个异构专家的 Top-3 路由），再在每个
 历史时刻经过关注全部风机的语义 Transformer 塔，按“特征到功率、历史到预测步”输出多步功率。
+语义塔默认开启；传入 `--satra-use-spatial-relation 0` 时，SPE 直接连接预测头，不构建任何
+跨风机注意力。
 该模型没有风机 ID 嵌入，风机身份由输入顺序保留。
 
 `MultiTurbine` 目前仅支持 `MultiTurbine` 场景，历史中不使用未来天气。传入 `--pretrain` 时，先对随机遮蔽的
-`风机 × 历史时刻` token 重建全部历史特征，再丢弃重建头并微调 SPE 与语义塔。DTW 先验
-默认关闭：不构建训练段关系图，也不创建先验塔。
+`风机 × 历史时刻` token 重建全部历史特征，再丢弃重建头并微调 SPE 与已启用的语义塔。DTW 先验
+默认关闭：不构建训练段关系图，也不创建先验塔；空间关系关闭时，DTW 先验也不会构建。
 
 ```bash
 env -u LD_LIBRARY_PATH uv run python run_multi.py \

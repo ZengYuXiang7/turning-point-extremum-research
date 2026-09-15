@@ -10,46 +10,21 @@ import config as project_config
 from config import BASE_INTERVAL_SECONDS, PROJECT_ROOT
 
 
-def dump_weather_forecasts(
-    model,
-    datasets,
-    batch_size,
-    num_workers,
-    device,
-    run_dir,
-    show_progress,
-):
+def dump_weather_forecasts(model, datasets, batch_size, num_workers, device, run_dir, show_progress,):
     # 按窗口写出三份未来天气，供预测天气场景读取。
     model.eval()
     for split in ("train", "val", "test"):
-        loader = DataLoader(
-            datasets[split],
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=num_workers,
-            pin_memory=True,
-            drop_last=False,
-        )
+        loader = DataLoader(datasets[split], batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True, drop_last=False,)
         weather_chunks = []
         turbine_chunks = []
         start_chunks = []
-        batches = tqdm(
-            loader,
-            total=len(loader),
-            desc=f"dump weather {split}",
-            disable=show_progress == 0,
-            leave=False,
-        )
+        batches = tqdm(loader, total=len(loader), desc=f"dump weather {split}", disable=show_progress == 0, leave=False,)
         with torch.no_grad():
             for past, weather, target, turbine_id, target_start in batches:
                 past = past.to(device, non_blocking=True)
                 weather = weather.to(device, non_blocking=True)
                 turbine_gpu = turbine_id.to(device, non_blocking=True)
-                with torch.autocast(
-                    device_type=device.type,
-                    dtype=torch.bfloat16,
-                    enabled=device.type == "cuda",
-                ):
+                with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == "cuda",):
                     prediction = model(past, weather, turbine_gpu)
                 weather_chunks.append(prediction.float().cpu().numpy())
                 turbine_chunks.append(turbine_id.numpy())
@@ -59,50 +34,18 @@ def dump_weather_forecasts(
         turbine_ids = np.concatenate(turbine_chunks).astype(np.int16)
         starts = np.concatenate(start_chunks).astype(np.int64)
         out_path = run_dir / f"weather_forecast_{split}.npz"
-        np.savez_compressed(
-            out_path,
-            weather=weather_pred,
-            turbine_id=turbine_ids,
-            target_start_ns=starts,
-        )
+        np.savez_compressed(out_path, weather=weather_pred, turbine_id=turbine_ids, target_start_ns=starts,)
         display_path = out_path.resolve()
         if display_path.is_relative_to(PROJECT_ROOT):
             display_path = display_path.relative_to(PROJECT_ROOT)
-        print(
-            json.dumps(
-                {
-                    "event": "weather_forecast_saved",
-                    "split": split,
-                    "path": display_path.as_posix(),
-                    "windows": int(weather_pred.shape[0]),
-                    "shape": list(weather_pred.shape),
-                },
-                ensure_ascii=False,
-            ),
-            flush=True,
-        )
+        print(json.dumps({ "event": "weather_forecast_saved", "split": split, "path": display_path.as_posix(), "windows": int(weather_pred.shape[0]), "shape": list(weather_pred.shape), }, ensure_ascii=False,), flush=True,)
 
 
 def evaluate_weather(args, model, datasets, device, checkpoint, best_epoch, best_mse):
     # 天气程序生成预测文件并汇总测试尺度误差。
     run_dir = Path(args.run_dir)
-    dump_weather_forecasts(
-        model,
-        datasets,
-        args.batch_size,
-        args.num_workers,
-        device,
-        run_dir,
-        args.show_progress,
-    )
-    test_loader = DataLoader(
-        datasets["test"],
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.num_workers,
-        pin_memory=True,
-        drop_last=False,
-    )
+    dump_weather_forecasts(model, datasets, args.batch_size, args.num_workers, device, run_dir, args.show_progress,)
+    test_loader = DataLoader(datasets["test"], batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True, drop_last=False,)
     test_mse_total = 0.0
     test_points = 0
     with torch.no_grad():
@@ -111,11 +54,7 @@ def evaluate_weather(args, model, datasets, device, checkpoint, best_epoch, best
             weather = weather.to(device, non_blocking=True)
             target = target.to(device, non_blocking=True)
             turbine_id = turbine_id.to(device, non_blocking=True)
-            with torch.autocast(
-                device_type=device.type,
-                dtype=torch.bfloat16,
-                enabled=device.type == "cuda",
-            ):
+            with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == "cuda",):
                 prediction = model(past, weather, turbine_id)
                 mse = torch.mean((prediction - target) ** 2)
             count = int(target.numel())
@@ -169,10 +108,5 @@ def evaluate_weather(args, model, datasets, device, checkpoint, best_epoch, best
     display_checkpoint = checkpoint.resolve()
     if display_checkpoint.is_relative_to(PROJECT_ROOT):
         display_checkpoint = display_checkpoint.relative_to(PROJECT_ROOT)
-    print(
-        f"[ForecastWeather] {status} best_epoch={best_epoch} "
-        f"test_mse_scaled={test_mse_scaled:.6f} "
-        f"checkpoint={display_checkpoint.as_posix()}",
-        flush=True,
-    )
+    print(f"[ForecastWeather] {status} best_epoch={best_epoch} " f"test_mse_scaled={test_mse_scaled:.6f} " f"checkpoint={display_checkpoint.as_posix()}", flush=True,)
     return final

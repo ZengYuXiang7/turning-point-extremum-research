@@ -72,9 +72,7 @@ def main():
         negative_count,
         negative_count * 100 / len(power_values),
     ]
-    statistics_frame = pd.DataFrame(
-        {"统计量": statistic_names, "数值": statistic_values}
-    )
+    statistics_frame = pd.DataFrame({"统计量": statistic_names, "数值": statistic_values})
     statistics_frame.to_csv(STATISTICS_PATH, index=False, encoding="utf-8-sig")
 
     # 设置中文字体与分布绘图参数
@@ -126,12 +124,7 @@ def main():
     # 标注全样本时间范围并导出图件
     start_time = timestamps[0].strftime("%Y-%m-%d %H:%M:%S")
     end_time = timestamps[-1].strftime("%Y-%m-%d %H:%M:%S")
-    figure.suptitle(
-        f"风机 1 功率数据分布（全量 {len(power_values):,} 个样本）\n"
-        f"{start_time} 至 {end_time}",
-        fontproperties=title_font,
-        y=1.02,
-    )
+    figure.suptitle(f"风机 1 功率数据分布（全量 {len(power_values):,} 个样本）\n" f"{start_time} 至 {end_time}", fontproperties=title_font, y=1.02,)
     figure.tight_layout()
     figure.savefig(FIGURE_PATH, dpi=300, bbox_inches="tight", facecolor="white")
     figure.savefig(PDF_PATH, bbox_inches="tight", facecolor="white")

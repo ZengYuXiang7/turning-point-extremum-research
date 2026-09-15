@@ -54,12 +54,7 @@ def build_optimization(args, model, device):
     else:
         scheduler_mode = "min"
         selection_metric = "validation_mse_scaled"
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode=scheduler_mode,
-        factor=0.5,
-        patience=3,
-    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode=scheduler_mode, factor=0.5, patience=3,)
     return objective, optimizer, scheduler, select_acc30, selection_metric
 
 
@@ -75,15 +70,7 @@ def build_power_scales(repository, device):
     return power_means, power_stds
 
 
-def build_training_config(
-    args,
-    model,
-    repository,
-    datasets,
-    pretraining,
-    compile_mode,
-    selection_metric,
-):
+def build_training_config(args, model, repository, datasets, pretraining, compile_mode, selection_metric,):
     # 多风机 checkpoint 只记录联合面板协议。
     config = vars(args).copy()
     if args.pretrain:
@@ -128,7 +115,4 @@ def build_training_config(
 def write_training_config(run_dir, config) -> None:
     # 配置与 checkpoint 使用同一个多风机运行目录。
     config_path = run_dir / "config.json"
-    config_path.write_text(
-        json.dumps(config, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8",)

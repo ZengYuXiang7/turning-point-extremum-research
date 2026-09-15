@@ -25,10 +25,7 @@ def print_data_summary(datasets, loaders, horizon_steps, window_stride_steps):
     horizon_minutes = horizon_steps * project_config.POINT_INTERVAL_SECONDS / 60
     stride_minutes = window_stride_steps * project_config.POINT_INTERVAL_SECONDS / 60
     point_minutes = project_config.POINT_INTERVAL_SECONDS / 60
-    print(
-        f"历史长度={history_minutes:g}分钟 预测长度={horizon_minutes:g}分钟 "
-        f"滑窗步长={stride_minutes:g}分钟\n"
-    )
+    print(f"历史长度={history_minutes:g}分钟 预测长度={horizon_minutes:g}分钟 " f"滑窗步长={stride_minutes:g}分钟\n")
 
     total_windows = 0
     for split in ("train", "val", "test"):
@@ -56,17 +53,6 @@ def print_data_summary(datasets, loaders, horizon_steps, window_stride_steps):
         for sample_index in range(loader.batch_size):
             batch_items.append(dataset[sample_index])
         past, target, turbine_id, _ = loader.collate_fn(batch_items)
-        print(
-            f"  {split:<5}  目标时间={format_ns_date(target_start_ns)} 至 "
-            f"{format_ns_date(target_end_ns)}  时间占比={time_ratio:.2f}%  "
-            f"窗口={len(dataset):,}（{window_ratio:.2f}%）  batches={len(loader):,}"
-        )
-        print(
-            f"    输入 past shape={list(past.shape)}  "
-            f"turbine_id shape={list(turbine_id.shape)}"
-        )
-        print(
-            f"    标签 target shape={list(target.shape)}  "
-            f"时间维={horizon_steps}点（每点{point_minutes:g}分钟）",
-            flush=True,
-        )
+        print(f"  {split:<5}  目标时间={format_ns_date(target_start_ns)} 至 " f"{format_ns_date(target_end_ns)}  时间占比={time_ratio:.2f}%  " f"窗口={len(dataset):,}（{window_ratio:.2f}%）  batches={len(loader):,}")
+        print(f"    输入 past shape={list(past.shape)}  " f"turbine_id shape={list(turbine_id.shape)}")
+        print(f"    标签 target shape={list(target.shape)}  " f"时间维={horizon_steps}点（每点{point_minutes:g}分钟）", flush=True,)

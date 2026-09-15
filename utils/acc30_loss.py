@@ -8,24 +8,13 @@ import torch.nn.functional as F
 class Acc30BoundaryLoss(nn.Module):
     """MSE + 平滑惩罚越过严格 30% 相对误差边界。"""
 
-    def __init__(
-        self,
-        weight: float = 0.3,
-        temperature: float = 0.03,
-        min_power_kw: float = 100.0,
-    ) -> None:
+    def __init__(self, weight: float = 0.3, temperature: float = 0.03, min_power_kw: float = 100.0,) -> None:
         super().__init__()
         self.weight = float(weight)
         self.temperature = float(temperature)
         self.min_power_kw = float(min_power_kw)
 
-    def forward(
-        self,
-        prediction: torch.Tensor,
-        target: torch.Tensor,
-        power_mean: torch.Tensor,
-        power_std: torch.Tensor,
-    ) -> torch.Tensor:
+    def forward(self, prediction: torch.Tensor, target: torch.Tensor, power_mean: torch.Tensor, power_std: torch.Tensor,) -> torch.Tensor:
         prediction = prediction.float()
         target = target.float()
         power_mean = power_mean.float()

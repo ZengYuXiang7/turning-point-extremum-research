@@ -36,25 +36,13 @@ def dtw_distance(first: np.ndarray, second: np.ndarray, band: int) -> float:
         upper = min(length, first_index + band)
         for second_index in range(lower, upper + 1):
             cost = (first[first_index - 1] - second[second_index - 1]) ** 2
-            current[second_index] = cost + min(
-                previous[second_index],
-                current[second_index - 1],
-                previous[second_index - 1],
-            )
+            current[second_index] = cost + min(previous[second_index], current[second_index - 1], previous[second_index - 1],)
         previous, current = current, previous
     distance = float(np.sqrt(previous[length] / length))
     return distance
 
 
-def build_wind_dtw_relation(
-    panel: np.ndarray,
-    train_end_index: int,
-    power_index: int,
-    top_k: int,
-    candidate_k: int,
-    downsample: int,
-    band: int,
-) -> torch.Tensor:
+def build_wind_dtw_relation(panel: np.ndarray, train_end_index: int, power_index: int, top_k: int, candidate_k: int, downsample: int, band: int,) -> torch.Tensor:
     """只用训练段功率轨迹构建风机 DTW 关系先验。"""
     train_power = panel[:, :train_end_index, power_index]
     standardized = standardize_trajectories(train_power)
@@ -75,11 +63,7 @@ def build_wind_dtw_relation(
         for candidate_index in candidate_indices[turbine_index]:
             if candidate_index == turbine_index:
                 continue
-            distance = dtw_distance(
-                trajectories[turbine_index],
-                trajectories[candidate_index],
-                band,
-            )
+            distance = dtw_distance(trajectories[turbine_index], trajectories[candidate_index], band,)
             scored.append((distance, candidate_index))
         scored.sort(key=lambda item: item[0])
         for _, candidate_index in scored[:relation_count]:

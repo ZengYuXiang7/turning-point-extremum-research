@@ -31,12 +31,7 @@ class TurbineSeries:
 
 
 class Repository:
-    def __init__(
-        self,
-        root: Path = DATASET_ROOT,
-        all_features: bool = False,
-        correlated_features: bool = False,
-    ) -> None:
+    def __init__(self, root: Path = DATASET_ROOT, all_features: bool = False, correlated_features: bool = False,) -> None:
         self.root = Path(root)
         reference_data = np.load(self.root / "turbine_01.npy", mmap_mode="r")
         reference_times = reference_data[:, 0].astype(np.int64) * 1_000_000_000
@@ -81,9 +76,7 @@ class Repository:
         twist_angle_index = source_columns.index("偏航系统-扭揽角度")
 
         for turbine in range(1, 17):
-            data = np.load(
-                self.root / f"turbine_{turbine:02d}.npy", mmap_mode="r"
-            )
+            data = np.load(self.root / f"turbine_{turbine:02d}.npy", mmap_mode="r")
             times = data[:, 0].astype(np.int64) * 1_000_000_000
             source = data[:, 1:]
 
@@ -132,13 +125,7 @@ class Repository:
             power_mean = float(feature_means[self.power_index])
             power_std = float(feature_stds[self.power_index])
 
-            series = TurbineSeries(
-                times=times,
-                raw=raw,
-                scaled=scaled,
-                power_mean=power_mean,
-                power_std=power_std,
-            )
+            series = TurbineSeries(times=times, raw=raw, scaled=scaled, power_mean=power_mean, power_std=power_std,)
 
             raw_series.append(series)
 
@@ -159,38 +146,10 @@ def load_weather_forecast_table(path: Path):
     return table
 
 
-def make_loaders(
-    train_dataset,
-    val_dataset,
-    test_dataset,
-    batch_size: int,
-    num_workers: int,
-    shuffle_train: bool,
-):
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=shuffle_train,
-        num_workers=num_workers,
-        pin_memory=True,
-        drop_last=True,
-    )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True,
-        drop_last=True,
-    )
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True,
-        drop_last=False,
-    )
+def make_loaders(train_dataset, val_dataset, test_dataset, batch_size: int, num_workers: int, shuffle_train: bool,):
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle_train, num_workers=num_workers, pin_memory=True, drop_last=True,)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True, drop_last=True,)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True, drop_last=False,)
     loaders = {
         "train": train_loader,
         "val": val_loader,

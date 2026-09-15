@@ -22,22 +22,12 @@ from tasks.single.configuration import parse_args
 class TestMaskedPretraining(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(2026)
-        model_args = SimpleNamespace(
-            model="PatchMLPAllFeatures",
-            scenario="NoFutureWeather",
-            horizon_steps=3,
-        )
-        repository = SimpleNamespace(
-            feature_names=list(range(56)),
-            power_index=55,
-        )
+        model_args = SimpleNamespace(model="PatchMLPAllFeatures", scenario="NoFutureWeather", horizon_steps=3,)
+        repository = SimpleNamespace(feature_names=list(range(56)), power_index=55,)
         self.model = SingleModel(model_args, repository)
         self.past = torch.randn(4, HISTORY_STEPS, 56)
         self.turbine_id = torch.tensor([0, 1, 2, 3])
-        self.pretrainer = MaskedTokenPretraining(
-            self.model.backbone,
-            HISTORY_STEPS,
-        )
+        self.pretrainer = MaskedTokenPretraining(self.model.backbone, HISTORY_STEPS,)
 
     def test_pretrain_flag_controls_activation_independently_from_epochs(self):
         # 轮数是训练参数，只有pretrain开关决定是否执行第一阶段
@@ -55,9 +45,7 @@ class TestMaskedPretraining(unittest.TestCase):
         self.assertEqual(direct_args.pretrain_epochs, 20)
         self.assertEqual(pretrain_args.pretrain_epochs, 20)
         self.assertEqual(pretrain_args.mae_mask_ratio, 0.3)
-        self.assertEqual(
-            pretrain_args.pretrain_lr_scheduler, "cosine_hard_restarts",
-        )
+        self.assertEqual(pretrain_args.pretrain_lr_scheduler, "cosine_hard_restarts",)
 
     def test_random_tokens_share_all_features_and_support_short_history(self):
         # 最短历史也同时保留可见与缺失 token
@@ -91,16 +79,8 @@ class TestMaskedPretraining(unittest.TestCase):
         with torch.no_grad():
             reconstruction = self.pretrainer(self.past, self.turbine_id, mask)
             expected = (reconstruction - self.past).square()[mask].mean().item()
-        first = run_masked_epoch(
-            self.pretrainer, loader, None, torch.device("cpu"),
-            0.4, 7, False, 0, 1,
-            None, False,
-        )
-        second = run_masked_epoch(
-            self.pretrainer, loader, None, torch.device("cpu"),
-            0.4, 7, False, 0, 2,
-            None, False,
-        )
+        first = run_masked_epoch(self.pretrainer, loader, None, torch.device("cpu"), 0.4, 7, False, 0, 1, None, False,)
+        second = run_masked_epoch(self.pretrainer, loader, None, torch.device("cpu"), 0.4, 7, False, 0, 2, None, False,)
         self.assertAlmostEqual(first, expected, places=6)
         self.assertEqual(first, second)
 
@@ -111,20 +91,10 @@ class TestMaskedPretraining(unittest.TestCase):
         train_dataset = TensorDataset(self.past, targets, self.turbine_id, starts)
         validation_dataset = TensorDataset(self.past + 0.2, targets, self.turbine_id, starts)
         validation_dataset.windows = [(0, 0), (0, 1), (0, 2), (0, 3)]
-        repository = SimpleNamespace(
-            train_end=10,
-            series=[SimpleNamespace(times=[0, 10, 20, 30])],
-        )
+        repository = SimpleNamespace(train_end=10, series=[SimpleNamespace(times=[0, 10, 20, 30])],)
         datasets = {"train": train_dataset, "val": validation_dataset}
         loaders = {"train": DataLoader(train_dataset, batch_size=2, shuffle=True)}
-        args = SimpleNamespace(
-            model="PatchMLPAllFeatures", seed=2026, history_steps=HISTORY_STEPS,
-            batch_size=2, num_workers=0, result_name="", dataset_name="Synthetic",
-            pretrain_epochs=2, pretrain_learning_rate=0.001,
-            pretrain_lr_scheduler="cosine_hard_restarts", mae_mask_ratio=0.3,
-            pretrain_patience=2, print_freq=1,
-            show_progress=0,
-        )
+        args = SimpleNamespace(model="PatchMLPAllFeatures", seed=2026, history_steps=HISTORY_STEPS, batch_size=2, num_workers=0, result_name="", dataset_name="Synthetic", pretrain_epochs=2, pretrain_learning_rate=0.001, pretrain_lr_scheduler="cosine_hard_restarts", mae_mask_ratio=0.3, pretrain_patience=2, print_freq=1, show_progress=0,)
         backbone = self.model.backbone
         initial_embedding = (
             backbone.patch_embedding.EmbLayer_1.ff[0].weight.detach().clone()
@@ -132,10 +102,7 @@ class TestMaskedPretraining(unittest.TestCase):
         initial_power_head = backbone.output_projection.weight.detach().clone()
         rng_state = torch.get_rng_state().clone()
         with tempfile.TemporaryDirectory() as directory:
-            summary = pretrain_power_encoder(
-                args, self.model, repository, datasets, loaders,
-                torch.device("cpu"), Path(directory),
-            )
+            summary = pretrain_power_encoder(args, self.model, repository, datasets, loaders, torch.device("cpu"), Path(directory),)
             torch.testing.assert_close(torch.get_rng_state(), rng_state)
             self.assertEqual(summary["validation_windows"], 3)
             history = json.loads(Path(summary["history"]).read_text())

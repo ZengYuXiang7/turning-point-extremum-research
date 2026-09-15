@@ -36,6 +36,7 @@ runs/
 wandb/
 lightning_logs/
 tensorboard/
+output/
 
 *.pt
 *.pth

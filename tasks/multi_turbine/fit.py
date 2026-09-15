@@ -21,20 +21,7 @@ def validation_improved(select_acc30, val_mse, val_acc30, best_mse, best_acc30):
     return improved
 
 
-def fit_model(
-    args,
-    model,
-    loaders,
-    device,
-    objective,
-    optimizer,
-    scheduler,
-    select_acc30,
-    power_means,
-    power_stds,
-    config,
-    run_dir,
-):
+def fit_model(args, model, loaders, device, objective, optimizer, scheduler, select_acc30, power_means, power_stds, config, run_dir,):
     # 多风机程序独立执行联合面板训练、选模与早停。
     best_mse = float("inf")
     best_acc30 = float("-inf")
@@ -49,32 +36,8 @@ def fit_model(
 
     for epoch in range(1, args.epochs + 1):
         started = time.time()
-        _, train_mse, train_acc30 = run_epoch(
-            model,
-            loaders["train"],
-            device,
-            optimizer,
-            objective,
-            args.dbloss_weight,
-            True,
-            power_means,
-            power_stds,
-            args.show_progress,
-            epoch,
-        )
-        _, val_mse, val_acc30 = run_epoch(
-            model,
-            loaders["val"],
-            device,
-            optimizer,
-            objective,
-            args.dbloss_weight,
-            False,
-            power_means,
-            power_stds,
-            args.show_progress,
-            epoch,
-        )
+        _, train_mse, train_acc30 = run_epoch(model, loaders["train"], device, optimizer, objective, args.dbloss_weight, True, power_means, power_stds, args.show_progress, epoch,)
+        _, val_mse, val_acc30 = run_epoch(model, loaders["val"], device, optimizer, objective, args.dbloss_weight, False, power_means, power_stds, args.show_progress, epoch,)
         if select_acc30:
             scheduler.step(val_acc30)
         else:
@@ -96,17 +59,9 @@ def fit_model(
         if epoch == args.epochs:
             log_epoch = True
         if log_epoch:
-            print(
-                f"[MultiTurbine] epoch {epoch}/{args.epochs} "
-                f"train_mse={train_mse:.6f} train_acc30={train_acc30:.2f}% "
-                f"val_mse={val_mse:.6f} val_acc30={val_acc30:.2f}% "
-                f"lr={optimizer.param_groups[0]['lr']:.1e} {seconds:.1f}s",
-                flush=True,
-            )
+            print(f"[MultiTurbine] epoch {epoch}/{args.epochs} " f"train_mse={train_mse:.6f} train_acc30={train_acc30:.2f}% " f"val_mse={val_mse:.6f} val_acc30={val_acc30:.2f}% " f"lr={optimizer.param_groups[0]['lr']:.1e} {seconds:.1f}s", flush=True,)
 
-        improved = validation_improved(
-            select_acc30, val_mse, val_acc30, best_mse, best_acc30
-        )
+        improved = validation_improved(select_acc30, val_mse, val_acc30, best_mse, best_acc30)
         if improved:
             best_mse = val_mse
             best_acc30 = val_acc30
@@ -129,10 +84,7 @@ def fit_model(
         else:
             wait += 1
             if wait >= args.patience:
-                print(
-                    f"[MultiTurbine] early_stop epoch={epoch} best_epoch={best_epoch}",
-                    flush=True,
-                )
+                print(f"[MultiTurbine] early_stop epoch={epoch} best_epoch={best_epoch}", flush=True,)
                 break
 
     history_path = run_dir / "history.json"

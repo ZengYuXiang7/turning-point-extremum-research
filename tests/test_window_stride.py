@@ -13,11 +13,7 @@ class TestWindowStride(unittest.TestCase):
         step_ns = 10 * 1_000_000_000
         times = start + np.arange(1_200, dtype=np.int64) * step_ns
         series = SimpleNamespace(times=times)
-        self.repository = SimpleNamespace(
-            series=[series],
-            train_end=int(times[0]),
-            valid_end=int(times[-1] + step_ns),
-        )
+        self.repository = SimpleNamespace(series=[series], train_end=int(times[0]), valid_end=int(times[-1] + step_ns),)
 
     def test_single_turbine_windows_align_to_quarter_hour(self):
         with (

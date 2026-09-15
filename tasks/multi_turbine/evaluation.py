@@ -18,22 +18,12 @@ def collect_panel_predictions(args, model, loaders, device):
     truths = []
     turbines = []
     target_starts = []
-    batches = tqdm(
-        loaders["test"],
-        total=len(loaders["test"]),
-        desc="test",
-        disable=args.show_progress == 0,
-        leave=False,
-    )
+    batches = tqdm(loaders["test"], total=len(loaders["test"]), desc="test", disable=args.show_progress == 0, leave=False,)
     with torch.no_grad():
         for past, target, turbine_id, target_start in batches:
             past = past.to(device, non_blocking=True)
             turbine_gpu = turbine_id.to(device, non_blocking=True)
-            with torch.autocast(
-                device_type=device.type,
-                dtype=torch.bfloat16,
-                enabled=device.type == "cuda",
-            ):
+            with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == "cuda",):
                 prediction = model(past, turbine_gpu)
             predictions.append(prediction.float().cpu().numpy())
             truths.append(target.numpy())
@@ -66,40 +56,16 @@ def restore_panel_power(repository, prediction_scaled, truth_scaled, turbine_ids
     return prediction, truth
 
 
-def test_checkpoint(
-    args,
-    model,
-    repository,
-    datasets,
-    loaders,
-    device,
-    checkpoint,
-    contract_checkpoint,
-    best_epoch,
-    best_mse,
-    best_acc30,
-    history,
-    pretraining,
-):
+def test_checkpoint(args, model, repository, datasets, loaders, device, checkpoint, contract_checkpoint, best_epoch, best_mse, best_acc30, history, pretraining,):
     # 多风机程序恢复联合面板检查点并保存测试产物。
     run_dir = Path(args.run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     state = torch.load(checkpoint, map_location=device, weights_only=False)
     model.load_state_dict(state["model_state"])
     model.eval()
-    prediction_scaled, truth_scaled, turbine_ids, starts = collect_panel_predictions(
-        args, model, loaders, device
-    )
-    prediction, truth = restore_panel_power(
-        repository, prediction_scaled, truth_scaled, turbine_ids
-    )
-    np.savez_compressed(
-        run_dir / "test_predictions.npz",
-        prediction=prediction.astype(np.float32),
-        truth=truth.astype(np.float32),
-        turbine_id=(turbine_ids + 1).astype(np.int16),
-        target_start_ns=starts,
-    )
+    prediction_scaled, truth_scaled, turbine_ids, starts = collect_panel_predictions(args, model, loaders, device)
+    prediction, truth = restore_panel_power(repository, prediction_scaled, truth_scaled, turbine_ids)
+    np.savez_compressed(run_dir / "test_predictions.npz", prediction=prediction.astype(np.float32), truth=truth.astype(np.float32), turbine_id=(turbine_ids + 1).astype(np.int16), target_start_ns=starts,)
     metrics = metric_bundle(prediction, truth, turbine_ids)
     save_metrics(run_dir, metrics)
     curve_overall = metrics[0]
@@ -108,17 +74,7 @@ def test_checkpoint(
     record_path = ""
     if args.result_name:
         if args.mode == "train":
-            report_path, record_path = write_power_result_contract(
-                args,
-                repository,
-                datasets,
-                contract_checkpoint,
-                best_epoch,
-                best_mse,
-                history,
-                curve_overall,
-                pretraining,
-            )
+            report_path, record_path = write_power_result_contract(args, repository, datasets, contract_checkpoint, best_epoch, best_mse, history, curve_overall, pretraining,)
         else:
             report_path = result_report_path(args.dataset_name, args.result_name)
             record_path = result_record_path(args.dataset_name, args.result_name)
@@ -182,9 +138,5 @@ def test_checkpoint(
     display_checkpoint = checkpoint.resolve()
     if display_checkpoint.is_relative_to(PROJECT_ROOT):
         display_checkpoint = display_checkpoint.relative_to(PROJECT_ROOT)
-    print(
-        f"[MultiTurbine] {args.mode} best_epoch={best_epoch} {metric_text} "
-        f"checkpoint={display_checkpoint.as_posix()}",
-        flush=True,
-    )
+    print(f"[MultiTurbine] {args.mode} best_epoch={best_epoch} {metric_text} " f"checkpoint={display_checkpoint.as_posix()}", flush=True,)
     return final

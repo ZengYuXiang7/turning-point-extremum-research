@@ -5,19 +5,7 @@ from tqdm import tqdm
 from utils.acc30_loss import Acc30BoundaryLoss
 
 
-def run_epoch(
-    model,
-    loader,
-    device,
-    optimizer,
-    objective,
-    dbloss_weight,
-    train,
-    power_means,
-    power_stds,
-    show_progress,
-    epoch,
-):
+def run_epoch(model, loader, device, optimizer, objective, dbloss_weight, train, power_means, power_stds, show_progress, epoch,):
     # 联合面板 epoch 始终读取16台历史并同时预测16台功率。
     model.train(train)
     total_loss = 0.0
@@ -33,13 +21,7 @@ def run_epoch(
         context = torch.no_grad()
         stage = "val"
 
-    batches = tqdm(
-        loader,
-        total=len(loader),
-        desc=f"epoch {epoch} {stage}",
-        disable=show_progress == 0,
-        leave=False,
-    )
+    batches = tqdm(loader, total=len(loader), desc=f"epoch {epoch} {stage}", disable=show_progress == 0, leave=False,)
     with context:
         for past, target, turbine_id, _ in batches:
             past = past.to(device, non_blocking=True)
@@ -51,11 +33,7 @@ def run_epoch(
             if train:
                 optimizer.zero_grad(set_to_none=True)
 
-            with torch.autocast(
-                device_type=device.type,
-                dtype=torch.bfloat16,
-                enabled=device.type == "cuda",
-            ):
+            with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == "cuda",):
                 prediction = model(past, turbine_id)
                 mse = torch.mean((prediction - target) ** 2)
                 if objective is None:
@@ -87,11 +65,7 @@ def run_epoch(
                 strict_valid += int(valid.sum().item())
                 strict_passed += int(passed.sum().item())
 
-            batches.set_postfix(
-                loss=total_loss / points,
-                mse=total_mse / points,
-                refresh=False,
-            )
+            batches.set_postfix(loss=total_loss / points, mse=total_mse / points, refresh=False,)
 
     strict_acc30 = 100.0 * strict_passed / strict_valid
     return total_loss / points, total_mse / points, strict_acc30

@@ -27,13 +27,7 @@ def stack_multi_turbine_panel(repository: Repository) -> np.ndarray:
 class MultiTurbineRelationRepository(Repository):
     """同步十六台风机的联合时间面板。"""
 
-    def __init__(
-        self,
-        pstr_relation_top_k: int = 0,
-        pstr_relation_candidate_k: int = 0,
-        pstr_relation_downsample: int = 0,
-        pstr_relation_band: int = 0,
-    ) -> None:
+    def __init__(self, pstr_relation_top_k: int = 0, pstr_relation_candidate_k: int = 0, pstr_relation_downsample: int = 0, pstr_relation_band: int = 0,) -> None:
         super().__init__()
         self.panel = stack_multi_turbine_panel(self)
         self.times = self.series[0].times
@@ -45,15 +39,7 @@ class MultiTurbineRelationRepository(Repository):
         self.val_panel = self.panel[:, self.train_end_index : self.valid_end_index]
         self.test_panel = self.panel[:, self.valid_end_index :]
         if pstr_relation_top_k:
-            self.pstr_relation_weight = build_wind_dtw_relation(
-                self.panel,
-                self.train_end_index,
-                self.power_index,
-                pstr_relation_top_k,
-                pstr_relation_candidate_k,
-                pstr_relation_downsample,
-                pstr_relation_band,
-            )
+            self.pstr_relation_weight = build_wind_dtw_relation(self.panel, self.train_end_index, self.power_index, pstr_relation_top_k, pstr_relation_candidate_k, pstr_relation_downsample, pstr_relation_band,)
 
 
 class MultiTurbineNoFutureWeatherDataset(Dataset):
@@ -75,17 +61,8 @@ class MultiTurbineNoFutureWeatherDataset(Dataset):
             + project_config.HISTORY_STEPS * project_config.POINT_STRIDE_STEPS
         )
         target_end = target_start + self.horizon * project_config.POINT_STRIDE_STEPS
-        past = np.ascontiguousarray(
-            self.repository.panel[
-                :, history_start:target_start:project_config.POINT_STRIDE_STEPS, :
-            ]
-        )
-        target = np.ascontiguousarray(
-            self.repository.panel[
-                :, target_start:target_end:project_config.POINT_STRIDE_STEPS,
-                self.repository.power_index,
-            ]
-        )
+        past = np.ascontiguousarray(self.repository.panel[ :, history_start:target_start:project_config.POINT_STRIDE_STEPS, : ])
+        target = np.ascontiguousarray(self.repository.panel[ :, target_start:target_end:project_config.POINT_STRIDE_STEPS, self.repository.power_index, ])
         turbine_id = torch.arange(len(self.repository.series), dtype=torch.long)
         target_start_ns = int(self.repository.times[target_start])
 
@@ -116,24 +93,9 @@ class MultiTurbineOracleFutureWeatherDataset(Dataset):
             + project_config.HISTORY_STEPS * project_config.POINT_STRIDE_STEPS
         )
         target_end = target_start + self.horizon * project_config.POINT_STRIDE_STEPS
-        past = np.ascontiguousarray(
-            self.repository.panel[
-                :, history_start:target_start:project_config.POINT_STRIDE_STEPS, :
-            ]
-        )
-        weather = np.ascontiguousarray(
-            self.repository.panel[
-                :,
-                target_start:target_end:project_config.POINT_STRIDE_STEPS,
-                WEATHER_INDICES,
-            ]
-        )
-        target = np.ascontiguousarray(
-            self.repository.panel[
-                :, target_start:target_end:project_config.POINT_STRIDE_STEPS,
-                self.repository.power_index,
-            ]
-        )
+        past = np.ascontiguousarray(self.repository.panel[ :, history_start:target_start:project_config.POINT_STRIDE_STEPS, : ])
+        weather = np.ascontiguousarray(self.repository.panel[ :, target_start:target_end:project_config.POINT_STRIDE_STEPS, WEATHER_INDICES, ])
+        target = np.ascontiguousarray(self.repository.panel[ :, target_start:target_end:project_config.POINT_STRIDE_STEPS, self.repository.power_index, ])
         turbine_id = torch.arange(len(self.repository.series), dtype=torch.long)
         target_start_ns = int(self.repository.times[target_start])
 
@@ -146,21 +108,8 @@ class MultiTurbineOracleFutureWeatherDataset(Dataset):
         )
 
 
-def make_multi_turbine_no_future_weather_loaders(
-    horizon: int,
-    batch_size: int,
-    num_workers: int,
-    pstr_relation_top_k: int = 0,
-    pstr_relation_candidate_k: int = 0,
-    pstr_relation_downsample: int = 0,
-    pstr_relation_band: int = 0,
-):
-    repository = MultiTurbineRelationRepository(
-        pstr_relation_top_k,
-        pstr_relation_candidate_k,
-        pstr_relation_downsample,
-        pstr_relation_band,
-    )
+def make_multi_turbine_no_future_weather_loaders(horizon: int, batch_size: int, num_workers: int, pstr_relation_top_k: int = 0, pstr_relation_candidate_k: int = 0, pstr_relation_downsample: int = 0, pstr_relation_band: int = 0,):
+    repository = MultiTurbineRelationRepository(pstr_relation_top_k, pstr_relation_candidate_k, pstr_relation_downsample, pstr_relation_band,)
     train_dataset = MultiTurbineNoFutureWeatherDataset(repository, "train", horizon)
     val_dataset = MultiTurbineNoFutureWeatherDataset(repository, "val", horizon)
     test_dataset = MultiTurbineNoFutureWeatherDataset(repository, "test", horizon)
@@ -169,39 +118,19 @@ def make_multi_turbine_no_future_weather_loaders(
         "val": val_dataset,
         "test": test_dataset,
     }
-    loaders = make_loaders(
-        train_dataset,
-        val_dataset,
-        test_dataset,
-        batch_size,
-        num_workers,
-        shuffle_train=True,
-    )
+    loaders = make_loaders(train_dataset, val_dataset, test_dataset, batch_size, num_workers, shuffle_train=True,)
     return repository, datasets, loaders
 
 
-def make_multi_turbine_oracle_future_weather_loaders(
-    horizon: int, batch_size: int, num_workers: int
-):
+def make_multi_turbine_oracle_future_weather_loaders(horizon: int, batch_size: int, num_workers: int):
     repository = MultiTurbineRelationRepository()
-    train_dataset = MultiTurbineOracleFutureWeatherDataset(
-        repository, "train", horizon
-    )
+    train_dataset = MultiTurbineOracleFutureWeatherDataset(repository, "train", horizon)
     val_dataset = MultiTurbineOracleFutureWeatherDataset(repository, "val", horizon)
-    test_dataset = MultiTurbineOracleFutureWeatherDataset(
-        repository, "test", horizon
-    )
+    test_dataset = MultiTurbineOracleFutureWeatherDataset(repository, "test", horizon)
     datasets = {
         "train": train_dataset,
         "val": val_dataset,
         "test": test_dataset,
     }
-    loaders = make_loaders(
-        train_dataset,
-        val_dataset,
-        test_dataset,
-        batch_size,
-        num_workers,
-        shuffle_train=True,
-    )
+    loaders = make_loaders(train_dataset, val_dataset, test_dataset, batch_size, num_workers, shuffle_train=True,)
     return repository, datasets, loaders

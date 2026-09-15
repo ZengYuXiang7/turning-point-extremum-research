@@ -28,12 +28,7 @@ class ExponentialMovingAverage(nn.Module):
         with torch.autocast(device_type=values.device.type, enabled=False):
             work = values.float()
             batch, steps = work.shape
-            filtered = lfilter(
-                work,
-                self.a_coefficients.float(),
-                self.b_coefficients.float(),
-                clamp=False,
-            )
+            filtered = lfilter(work, self.a_coefficients.float(), self.b_coefficients.float(), clamp=False,)
             decay = 1.0 - self.alpha
             index = torch.arange(steps, device=work.device, dtype=work.dtype)
             initial_carry = torch.pow(decay, index + 1.0).unsqueeze(0) * work[:, :1]
@@ -59,9 +54,7 @@ class DBLoss(nn.Module):
         target_residual = target.float() - target_trend
         residual_loss = self.mse(prediction_residual, target_residual)
         trend_loss_raw = self.mae(prediction_trend, target_trend)
-        trend_loss_balanced = trend_loss_raw * (
-            residual_loss / (trend_loss_raw + 1e-8)
-        ).detach()
+        trend_loss_balanced = trend_loss_raw * (residual_loss / (trend_loss_raw + 1e-8)).detach()
         total = self.beta * residual_loss + (1.0 - self.beta) * trend_loss_balanced
         return total, residual_loss, trend_loss_raw, trend_loss_balanced
 

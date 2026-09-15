@@ -19,52 +19,21 @@ def select_backbone(args, repository):
         if timer_weather_mlp:
             from models.single_impl.timer import TimerWeatherMLP
 
-            backbone = TimerWeatherMLP(
-                horizon=args.horizon_steps,
-                pretrained_path=args.timer_path,
-                patch_length=args.timer_patch_length,
-                bottleneck=args.timer_bottleneck,
-                unfreeze_layers=args.timer_unfreeze_layers,
-                gradient_checkpointing=bool(args.timer_gradient_checkpointing),
-                residual_forecast=bool(args.timer_residual_forecast),
-            )
+            backbone = TimerWeatherMLP(horizon=args.horizon_steps, pretrained_path=args.timer_path, patch_length=args.timer_patch_length, bottleneck=args.timer_bottleneck, unfreeze_layers=args.timer_unfreeze_layers, gradient_checkpointing=bool(args.timer_gradient_checkpointing), residual_forecast=bool(args.timer_residual_forecast),)
         else:
             backbone = FutureWeatherModel(args.model, args.horizon_steps)
     elif qwen_mlp:
         from models.single_impl.qwen import QwenMLP
 
-        backbone = QwenMLP(
-            horizon=args.horizon_steps,
-            pretrained_path=args.llm_path,
-            patch_length=args.llm_patch_length,
-            patch_stride=args.llm_patch_stride,
-            bottleneck=args.llm_bottleneck,
-            gradient_checkpointing=bool(args.llm_gradient_checkpointing),
-        )
+        backbone = QwenMLP(horizon=args.horizon_steps, pretrained_path=args.llm_path, patch_length=args.llm_patch_length, patch_stride=args.llm_patch_stride, bottleneck=args.llm_bottleneck, gradient_checkpointing=bool(args.llm_gradient_checkpointing),)
     elif timer_weather_mlp:
         if not oracle:
-            raise ValueError(
-                "TimerWeatherMLP requires OracleFutureWeather or "
-                "PredictedFutureWeather"
-            )
+            raise ValueError("TimerWeatherMLP requires OracleFutureWeather or " "PredictedFutureWeather")
         from models.single_impl.timer import TimerWeatherMLP
 
-        backbone = TimerWeatherMLP(
-            horizon=args.horizon_steps,
-            pretrained_path=args.timer_path,
-            patch_length=args.timer_patch_length,
-            bottleneck=args.timer_bottleneck,
-            unfreeze_layers=args.timer_unfreeze_layers,
-            gradient_checkpointing=bool(args.timer_gradient_checkpointing),
-            residual_forecast=bool(args.timer_residual_forecast),
-        )
+        backbone = TimerWeatherMLP(horizon=args.horizon_steps, pretrained_path=args.timer_path, patch_length=args.timer_patch_length, bottleneck=args.timer_bottleneck, unfreeze_layers=args.timer_unfreeze_layers, gradient_checkpointing=bool(args.timer_gradient_checkpointing), residual_forecast=bool(args.timer_residual_forecast),)
     elif args.scenario == "NoFutureWeather":
-        backbone = NoFutureWeatherModel(
-            args.model,
-            args.horizon_steps,
-            len(repository.feature_names),
-            repository.power_index,
-        )
+        backbone = NoFutureWeatherModel(args.model, args.horizon_steps, len(repository.feature_names), repository.power_index,)
     else:
         backbone = FutureWeatherModel(args.model, args.horizon_steps)
     return backbone

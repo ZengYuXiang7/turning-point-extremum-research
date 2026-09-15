@@ -136,9 +136,7 @@ def add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--pretrain", action="store_true", default=False)
     parser.add_argument("--pretrain-epochs", type=int, default=20)
     parser.add_argument("--pretrain-learning-rate", type=float, default=1e-3)
-    parser.add_argument("--pretrain-lr-scheduler", choices=(
-        "step", "cosine", "cosine_hard_restarts", "linear", "none",
-    ), default="cosine_hard_restarts")
+    parser.add_argument("--pretrain-lr-scheduler", choices=("step", "cosine", "cosine_hard_restarts", "linear", "none",), default="cosine_hard_restarts")
     parser.add_argument("--mae-mask-ratio", type=float, default=0.3)
     parser.add_argument("--pretrain-patience", type=int, default=10)
     parser.add_argument("--print-freq", type=int, default=1)
@@ -160,12 +158,7 @@ def finalize_arguments(parser: argparse.ArgumentParser):
 
     # 未指定目录时按完整实验设置生成运行目录。
     if args.run_dir == "":
-        args.run_dir = str(
-            PROJECT_ROOT / ".runs" / "WeatherComparison" / args.scenario
-            / args.model / args.loss / f"point_{args.point_interval_seconds}s"
-            / f"history_{args.history_steps}steps" / f"horizon_{args.horizon_steps}steps"
-            / f"stride_{args.window_stride_steps}steps" / f"seed{args.seed}"
-        )
+        args.run_dir = str(PROJECT_ROOT / ".runs" / "WeatherComparison" / args.scenario / args.model / args.loss / f"point_{args.point_interval_seconds}s" / f"history_{args.history_steps}steps" / f"horizon_{args.horizon_steps}steps" / f"stride_{args.window_stride_steps}steps" / f"seed{args.seed}")
         if args.pretrain:
             args.run_dir += (
                 f"/pretrain_e{args.pretrain_epochs}_m{args.mae_mask_ratio:g}"

@@ -37,7 +37,7 @@ def select_model_metadata(model_name: str):
 
 
 def add_satra_config(args, model_config) -> None:
-    # DTW 参数只在 MultiTurbine 模型记录中出现。
+    # SATRA 结构开关只在 MultiTurbine 模型记录中出现。
     if args.model == "MultiTurbine":
         model_config["satra_hidden_dim"] = args.satra_hidden_dim
         model_config["satra_depth"] = args.satra_depth
@@ -45,8 +45,16 @@ def add_satra_config(args, model_config) -> None:
         model_config["satra_heads"] = args.satra_heads
         model_config["satra_tower_layers"] = args.satra_tower_layers
         model_config["satra_expert_top_k"] = args.satra_expert_top_k
-        model_config["satra_use_dtw_prior"] = bool(args.satra_use_dtw_prior)
-        if args.satra_use_dtw_prior:
+        model_config["satra_use_spatial_relation"] = bool(args.satra_use_spatial_relation)
+        if args.satra_use_spatial_relation:
+            model_config["spatial_relation"] = "semantic_cross_turbine_transformer"
+        else:
+            model_config["spatial_relation"] = "disabled"
+        use_dtw_prior = bool(args.satra_use_dtw_prior)
+        if not args.satra_use_spatial_relation:
+            use_dtw_prior = False
+        model_config["satra_use_dtw_prior"] = use_dtw_prior
+        if use_dtw_prior:
             model_config["turbine_embedding_relation"] = (
                 "training_split_dtw_prior_tower"
             )
@@ -59,17 +67,7 @@ def add_satra_config(args, model_config) -> None:
             model_config["satra_prior"] = "disabled"
 
 
-def write_power_result_contract(
-    args,
-    repository,
-    datasets,
-    checkpoint,
-    best_epoch,
-    best_mse,
-    history,
-    curve_overall,
-    pretraining,
-):
+def write_power_result_contract(args, repository, datasets, checkpoint, best_epoch, best_mse, history, curve_overall, pretraining,):
     # 写入多风机联合面板的正式 report 与 record。
     test_metrics = {
         "Acc30": curve_overall["strict_acc30"],
@@ -177,11 +175,7 @@ def write_power_result_contract(
         "significance": [],
         "rounds": rounds,
     }
-    result["significance"] = build_dataset_significance(
-        args.dataset_name,
-        args.result_name,
-        result,
-    )
+    result["significance"] = build_dataset_significance(args.dataset_name, args.result_name, result,)
     report_path = result_report_path(args.dataset_name, args.result_name)
     record_path = result_record_path(args.dataset_name, args.result_name)
     write_result_report(report_path, result)

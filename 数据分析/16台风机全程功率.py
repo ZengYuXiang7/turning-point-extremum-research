@@ -93,12 +93,7 @@ def main():
     end_time = np.load(PROCESSED_ROOT / "turbine_01.npy", mmap_mode="r")[-1, 0]
     start_date = np.datetime64(int(start_time), "s").astype("datetime64[D]")
     end_date = np.datetime64(int(end_time), "s").astype("datetime64[D]")
-    figure.suptitle(
-        f"16台风机全程功率（原始10秒粒度，无降采样/聚合）\n"
-        f"{start_date} 至 {end_date}；每台 {len(power_values):,} 个样本；统一纵轴 {lower_bound:.0f}–{upper_bound:.0f} kW",
-        fontproperties=title_font,
-        y=0.995,
-    )
+    figure.suptitle(f"16台风机全程功率（原始10秒粒度，无降采样/聚合）\n" f"{start_date} 至 {end_date}；每台 {len(power_values):,} 个样本；统一纵轴 {lower_bound:.0f}–{upper_bound:.0f} kW", fontproperties=title_font, y=0.995,)
     figure.tight_layout(rect=(0, 0, 1, 0.95))
     figure.savefig(FIGURE_PATH, dpi=200, bbox_inches="tight", facecolor="white")
     figure.savefig(PDF_PATH, dpi=200, bbox_inches="tight", facecolor="white")

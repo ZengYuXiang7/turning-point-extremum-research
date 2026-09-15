@@ -61,23 +61,13 @@ class BottleneckExpert(nn.Module):
         super().__init__()
         self.history_steps = int(history_steps)
         self.model_dim = int(model_dim)
-        self.net = nn.Sequential(
-            nn.Linear(self.model_dim, bottleneck_dim),
-            nn.GELU(),
-            nn.Linear(bottleneck_dim, bottleneck_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(bottleneck_dim, self.model_dim),
-        )
+        self.net = nn.Sequential(nn.Linear(self.model_dim, bottleneck_dim), nn.GELU(), nn.Linear(bottleneck_dim, bottleneck_dim), nn.GELU(), nn.Dropout(dropout), nn.Linear(bottleneck_dim, self.model_dim),)
 
     def forward(self, flattened_history: torch.Tensor) -> torch.Tensor:
         history = flattened_history.reshape(-1, self.history_steps, self.model_dim)
         update = self.net(history)
         output = history + update
-        return output.reshape(
-            flattened_history.shape[0],
-            self.history_steps * self.model_dim,
-        )
+        return output.reshape(flattened_history.shape[0], self.history_steps * self.model_dim,)
 
 
 class SparseExpertDispatcher:
@@ -113,12 +103,7 @@ class StateConditionedExperts(nn.Module):
         for ratio in EXPERT_BOTTLENECK_RATIOS:
             bottleneck_dims.append(max(1, round(model_dim * ratio)))
         self.top_k = int(top_k)
-        self.experts = nn.ModuleList(
-            [
-                BottleneckExpert(history_steps, model_dim, width, dropout)
-                for width in bottleneck_dims
-            ]
-        )
+        self.experts = nn.ModuleList([ BottleneckExpert(history_steps, model_dim, width, dropout) for width in bottleneck_dims ])
         router_width = int(history_steps) * int(model_dim)
         self.gate_weights = nn.Parameter(torch.zeros(router_width, len(bottleneck_dims)))
         self.noise_weights = nn.Parameter(torch.zeros(router_width, len(bottleneck_dims)))
@@ -144,15 +129,7 @@ class StateConditionedExperts(nn.Module):
 class StateConditionedPatternExpert(nn.Module):
     """SPE：时域卷积后按完整历史状态选择异构专家。"""
 
-    def __init__(
-        self,
-        hidden_dim: int,
-        history_steps: int,
-        depth: int,
-        kernel_size: int,
-        top_k: int,
-        dropout: float,
-    ) -> None:
+    def __init__(self, hidden_dim: int, history_steps: int, depth: int, kernel_size: int, top_k: int, dropout: float,) -> None:
         super().__init__()
         self.hidden_dim = int(hidden_dim)
         self.history_steps = int(history_steps)
@@ -160,12 +137,7 @@ class StateConditionedPatternExpert(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.expert_dim = self.hidden_dim * 4
         self.expand = nn.Linear(self.hidden_dim, self.expert_dim)
-        self.experts = StateConditionedExperts(
-            history_steps,
-            self.expert_dim,
-            top_k,
-            dropout,
-        )
+        self.experts = StateConditionedExperts(history_steps, self.expert_dim, top_k, dropout,)
         self.reduce = nn.Linear(self.expert_dim, self.hidden_dim)
 
     def forward(self, values: torch.Tensor) -> torch.Tensor:
@@ -175,9 +147,7 @@ class StateConditionedPatternExpert(nn.Module):
         encoded = self.dropout(encoded)
         expanded = self.expand(encoded)
         routed = self.experts(expanded.reshape(batch_size * turbine_count, -1))
-        output = self.reduce(
-            routed.reshape(batch_size * turbine_count, history_steps, self.expert_dim)
-        )
+        output = self.reduce(routed.reshape(batch_size * turbine_count, history_steps, self.expert_dim))
         output = output.reshape(batch_size, turbine_count, history_steps, hidden_dim)
         return output
 
@@ -189,30 +159,13 @@ class CrossTurbineTransformer(nn.Module):
         super().__init__()
         self.first_norm = nn.RMSNorm(hidden_dim)
         self.second_norm = nn.RMSNorm(hidden_dim)
-        self.attention = nn.MultiheadAttention(
-            hidden_dim,
-            heads,
-            dropout=dropout,
-            batch_first=True,
-        )
+        self.attention = nn.MultiheadAttention(hidden_dim, heads, dropout=dropout, batch_first=True,)
         self.dropout = nn.Dropout(dropout)
-        self.feed_forward = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim * 2),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim * 2, hidden_dim),
-            nn.Dropout(dropout),
-        )
+        self.feed_forward = nn.Sequential(nn.Linear(hidden_dim, hidden_dim * 2), nn.GELU(), nn.Dropout(dropout), nn.Linear(hidden_dim * 2, hidden_dim), nn.Dropout(dropout),)
 
     def forward(self, values: torch.Tensor, attention_mask: torch.Tensor | None) -> torch.Tensor:
         normalized = self.first_norm(values)
-        attended, _ = self.attention(
-            normalized,
-            normalized,
-            normalized,
-            attn_mask=attention_mask,
-            need_weights=False,
-        )
+        attended, _ = self.attention(normalized, normalized, normalized, attn_mask=attention_mask, need_weights=False,)
         updated = values + self.dropout(attended)
         output = updated + self.feed_forward(self.second_norm(updated))
         return output

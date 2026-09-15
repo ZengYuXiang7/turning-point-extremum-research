@@ -31,30 +31,11 @@ def point_metrics(prediction, truth):
 
 def fit_lightgbm(train_values, train_targets, valid_values, valid_targets, args):
     # 用时间验证段早停训练回归模型
-    model = LGBMRegressor(
-        objective="regression_l2",
-        n_estimators=args.num_boost_round,
-        learning_rate=args.learning_rate,
-        num_leaves=args.num_leaves,
-        min_child_samples=args.min_child_samples,
-        subsample=1.0,
-        colsample_bytree=1.0,
-        reg_alpha=args.reg_alpha,
-        reg_lambda=args.reg_lambda,
-        random_state=args.seed,
-        n_jobs=args.num_workers,
-        importance_type="gain",
-        verbosity=-1,
-    )
-    stopping = early_stopping(
-        stopping_rounds=args.early_stopping_rounds, first_metric_only=True, verbose=False,
-    )
+    model = LGBMRegressor(objective="regression_l2", n_estimators=args.num_boost_round, learning_rate=args.learning_rate, num_leaves=args.num_leaves, min_child_samples=args.min_child_samples, subsample=1.0, colsample_bytree=1.0, reg_alpha=args.reg_alpha, reg_lambda=args.reg_lambda, random_state=args.seed, n_jobs=args.num_workers, importance_type="gain", verbosity=-1,)
+    stopping = early_stopping(stopping_rounds=args.early_stopping_rounds, first_metric_only=True, verbose=False,)
     logging = log_evaluation(period=0)
     callbacks = [stopping, logging]
-    model.fit(
-        train_values, train_targets, eval_set=[(valid_values, valid_targets)],
-        eval_metric="rmse", callbacks=callbacks,
-    )
+    model.fit(train_values, train_targets, eval_set=[(valid_values, valid_targets)], eval_metric="rmse", callbacks=callbacks,)
     return model
 
 
@@ -72,8 +53,7 @@ def expand_group_columns(selected_indices, history_steps, feature_count):
     return group_columns
 
 
-def evaluate_top_k(train_values, train_targets, valid_values, valid_targets,
-                   valid_ids, columns, predictor_frame, args):
+def evaluate_top_k(train_values, train_targets, valid_values, valid_targets, valid_ids, columns, predictor_frame, args):
     # 固定保留历史功率并重训各个Top-K预测字段子集
     ranked_names = predictor_frame["字段"].to_numpy()
     feature_count = len(columns)
@@ -88,14 +68,10 @@ def evaluate_top_k(train_values, train_targets, valid_values, valid_targets,
         selected_indices = np.empty(top_k + 1, dtype=np.int64)
         selected_indices[:top_k] = ranked_indices[:top_k]
         selected_indices[-1] = power_index
-        group_columns = expand_group_columns(
-            selected_indices, args.history_steps, feature_count,
-        )
+        group_columns = expand_group_columns(selected_indices, args.history_steps, feature_count,)
         selected_train = train_values[:, group_columns]
         selected_valid = valid_values[:, group_columns]
-        model = fit_lightgbm(
-            selected_train, train_targets, selected_valid, valid_targets, args,
-        )
+        model = fit_lightgbm(selected_train, train_targets, selected_valid, valid_targets, args,)
         prediction = model.predict(selected_valid, num_iteration=model.best_iteration_)
         overall_metrics = point_metrics(prediction, valid_targets)
 
@@ -107,37 +83,14 @@ def evaluate_top_k(train_values, train_targets, valid_values, valid_targets,
         for turbine_index in range(TURBINE_COUNT):
             turbine_id = turbine_index + 1
             turbine_mask = valid_ids == turbine_id
-            turbine_metrics = point_metrics(
-                prediction[turbine_mask], valid_targets[turbine_mask],
-            )
+            turbine_metrics = point_metrics(prediction[turbine_mask], valid_targets[turbine_mask],)
             turbine_rmse[turbine_index] = turbine_metrics["rmse_kw"]
             turbine_mae[turbine_index] = turbine_metrics["mae_kw"]
             turbine_acc30[turbine_index] = turbine_metrics["strict_acc30"]
             turbine_mape[turbine_index] = turbine_metrics["mape"]
-            turbine_metric_rows.append({
-                "Top-K预测字段数": top_k,
-                "风机编号": turbine_id,
-                "验证RMSE_kW": turbine_metrics["rmse_kw"],
-                "验证MAE_kW": turbine_metrics["mae_kw"],
-                "验证Acc30_percent": turbine_metrics["strict_acc30"],
-                "验证MAPE_percent": turbine_metrics["mape"],
-            })
+            turbine_metric_rows.append({ "Top-K预测字段数": top_k, "风机编号": turbine_id, "验证RMSE_kW": turbine_metrics["rmse_kw"], "验证MAE_kW": turbine_metrics["mae_kw"], "验证Acc30_percent": turbine_metrics["strict_acc30"], "验证MAPE_percent": turbine_metrics["mape"], })
 
-        metric_rows.append({
-            "Top-K预测字段数": top_k,
-            "实际输入字段数": top_k + 1,
-            "展开输入维数": len(group_columns),
-            "最佳迭代轮数": model.best_iteration_,
-            "总体验证RMSE_kW": overall_metrics["rmse_kw"],
-            "总体验证MAE_kW": overall_metrics["mae_kw"],
-            "总体验证Acc30_percent": overall_metrics["strict_acc30"],
-            "总体验证MAPE_percent": overall_metrics["mape"],
-            "Macro16验证RMSE_kW": float(np.mean(turbine_rmse)),
-            "Macro16验证MAE_kW": float(np.mean(turbine_mae)),
-            "Macro16验证Acc30_percent": float(np.mean(turbine_acc30)),
-            "Macro16验证MAPE_percent": float(np.mean(turbine_mape)),
-            "最大单机验证RMSE_kW": float(np.max(turbine_rmse)),
-        })
+        metric_rows.append({ "Top-K预测字段数": top_k, "实际输入字段数": top_k + 1, "展开输入维数": len(group_columns), "最佳迭代轮数": model.best_iteration_, "总体验证RMSE_kW": overall_metrics["rmse_kw"], "总体验证MAE_kW": overall_metrics["mae_kw"], "总体验证Acc30_percent": overall_metrics["strict_acc30"], "总体验证MAPE_percent": overall_metrics["mape"], "Macro16验证RMSE_kW": float(np.mean(turbine_rmse)), "Macro16验证MAE_kW": float(np.mean(turbine_mae)), "Macro16验证Acc30_percent": float(np.mean(turbine_acc30)), "Macro16验证MAPE_percent": float(np.mean(turbine_mape)), "最大单机验证RMSE_kW": float(np.max(turbine_rmse)), })
 
     top_k_frame = pd.DataFrame(metric_rows)
     turbine_top_k_frame = pd.DataFrame(turbine_metric_rows)

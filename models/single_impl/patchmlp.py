@@ -53,14 +53,8 @@ class Model(nn.Module):
         self.decompsition = series_decomp(13)
         # Embedding
         self.emb = Emb(configs.seq_len, configs.d_model)
-        self.seasonal_layers = nn.ModuleList([
-            Encoder(configs.d_model, configs.enc_in)
-            for i in range(configs.e_layers)
-        ])
-        self.trend_layers = nn.ModuleList([
-            Encoder(configs.d_model, configs.enc_in)
-            for i in range(configs.e_layers)
-        ])
+        self.seasonal_layers = nn.ModuleList([ Encoder(configs.d_model, configs.enc_in) for i in range(configs.e_layers) ])
+        self.trend_layers = nn.ModuleList([ Encoder(configs.d_model, configs.enc_in) for i in range(configs.e_layers) ])
 
         self.projector = nn.Linear(configs.d_model, configs.pred_len, bias=True)
 
@@ -103,17 +97,9 @@ class Encoder(nn.Module):
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
 
-        self.ff1 = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.GELU(),
-            nn.Dropout(0.1)
-        )
+        self.ff1 = nn.Sequential(nn.Linear(d_model, d_model), nn.GELU(), nn.Dropout(0.1))
 
-        self.ff2 = nn.Sequential(
-            nn.Linear(enc_in, enc_in),
-            nn.GELU(),
-            nn.Dropout(0.1)
-        )
+        self.ff2 = nn.Sequential(nn.Linear(enc_in, enc_in), nn.GELU(), nn.Dropout(0.1))
 
     def forward(self, x):
         

@@ -25,9 +25,7 @@ class VariableSelectionNetwork(nn.Module):
         for _ in range(variables):
             projections.append(nn.Linear(1, hidden))
         self.projections = nn.ModuleList(projections)
-        self.gate = nn.Sequential(
-            nn.Linear(variables, hidden), nn.ELU(), nn.Linear(hidden, variables)
-        )
+        self.gate = nn.Sequential(nn.Linear(variables, hidden), nn.ELU(), nn.Linear(hidden, variables))
 
     def forward(self, values: torch.Tensor) -> torch.Tensor:
         weights = torch.softmax(self.gate(values), dim=-1)
@@ -49,22 +47,11 @@ class FutureWeatherModel(nn.Module):
         self.horizon = int(horizon)
 
         if self.model_name == "patchmlp":
-            config = PatchConfig(
-                seq_len=project_config.HISTORY_STEPS,
-                pred_len=self.horizon,
-            )
+            config = PatchConfig(seq_len=project_config.HISTORY_STEPS, pred_len=self.horizon,)
             self.backbone = OfficialPatchMLP(config)
-            self.backbone.emb = Emb(
-                project_config.HISTORY_STEPS,
-                config.d_model,
-                patch_len=PATCH_LENGTHS,
-            )
+            self.backbone.emb = Emb(project_config.HISTORY_STEPS, config.d_model, patch_len=PATCH_LENGTHS,)
         elif self.model_name == "dlinear":
-            self.backbone = DLinear(
-                project_config.HISTORY_STEPS,
-                self.horizon,
-                len(HISTORY_COLUMNS),
-            )
+            self.backbone = DLinear(project_config.HISTORY_STEPS, self.horizon, len(HISTORY_COLUMNS),)
 
         self.past_projection = nn.Linear(len(HISTORY_COLUMNS), hidden)
         self.future_selection = VariableSelectionNetwork(len(WEATHER_COLUMNS), hidden)
@@ -74,12 +61,7 @@ class FutureWeatherModel(nn.Module):
         self.attention = nn.MultiheadAttention(hidden, 4, dropout=0.1, batch_first=True)
         self.base_projection = nn.Linear(1, hidden)
         self.gate = nn.Sequential(nn.Linear(hidden * 3, hidden), nn.Sigmoid())
-        self.fusion = nn.Sequential(
-            nn.Linear(hidden * 3, hidden),
-            nn.ELU(),
-            nn.Dropout(0.1),
-            nn.Linear(hidden, hidden),
-        )
+        self.fusion = nn.Sequential(nn.Linear(hidden * 3, hidden), nn.ELU(), nn.Dropout(0.1), nn.Linear(hidden, hidden),)
         self.norm = nn.LayerNorm(hidden)
         self.head = nn.Linear(hidden, 1)
 
@@ -92,20 +74,11 @@ class FutureWeatherModel(nn.Module):
         base_curve = forecast[:, :, POWER_INDEX]
         return base_curve
 
-    def forward(
-        self,
-        past: torch.Tensor,
-        future_weather: torch.Tensor,
-        turbine_id: torch.Tensor,
-    ) -> torch.Tensor:
+    def forward(self, past: torch.Tensor, future_weather: torch.Tensor, turbine_id: torch.Tensor,) -> torch.Tensor:
         base_curve = self.base_curve(past)
         turbine = self.turbine_embedding(turbine_id).unsqueeze(1)
         past_tokens = self.past_projection(past) + turbine
-        past_tokens = F.avg_pool1d(
-            past_tokens.transpose(1, 2),
-            kernel_size=TEMPORAL_POOL_STEPS,
-            stride=TEMPORAL_POOL_STEPS,
-        ).transpose(1, 2)
+        past_tokens = F.avg_pool1d(past_tokens.transpose(1, 2), kernel_size=TEMPORAL_POOL_STEPS, stride=TEMPORAL_POOL_STEPS,).transpose(1, 2)
 
         future_tokens = self.future_selection(future_weather) + turbine
         initial_state = self.initial_state(past_tokens.mean(dim=1)).unsqueeze(0)

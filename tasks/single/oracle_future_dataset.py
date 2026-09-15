@@ -33,24 +33,10 @@ class OracleFutureWeatherDataset(Dataset):
 
         start_ns = int(series.times[target_start])
 
-        past = np.ascontiguousarray(
-            series.scaled[
-                history_start:target_start:project_config.POINT_STRIDE_STEPS
-            ]
-        )
+        past = np.ascontiguousarray(series.scaled[ history_start:target_start:project_config.POINT_STRIDE_STEPS ])
 
-        weather = np.ascontiguousarray(
-            series.scaled[
-                target_start:target_end:project_config.POINT_STRIDE_STEPS,
-                WEATHER_INDICES,
-            ]
-        )
-        target = np.ascontiguousarray(
-            series.scaled[
-                target_start:target_end:project_config.POINT_STRIDE_STEPS,
-                POWER_INDEX,
-            ]
-        )
+        weather = np.ascontiguousarray(series.scaled[ target_start:target_end:project_config.POINT_STRIDE_STEPS, WEATHER_INDICES, ])
+        target = np.ascontiguousarray(series.scaled[ target_start:target_end:project_config.POINT_STRIDE_STEPS, POWER_INDEX, ])
 
         return (
             torch.from_numpy(past),
@@ -61,9 +47,7 @@ class OracleFutureWeatherDataset(Dataset):
         )
 
 
-def make_oracle_future_weather_loaders(
-    horizon: int, batch_size: int, num_workers: int
-):
+def make_oracle_future_weather_loaders(horizon: int, batch_size: int, num_workers: int):
     repository = Repository()
     
     train_dataset = OracleFutureWeatherDataset(repository, "train", horizon)
@@ -75,12 +59,5 @@ def make_oracle_future_weather_loaders(
         "val": val_dataset,
         "test": test_dataset,
     }
-    loaders = make_loaders(
-        train_dataset,
-        val_dataset,
-        test_dataset,
-        batch_size,
-        num_workers,
-        shuffle_train=True,
-    )
+    loaders = make_loaders(train_dataset, val_dataset, test_dataset, batch_size, num_workers, shuffle_train=True,)
     return repository, datasets, loaders

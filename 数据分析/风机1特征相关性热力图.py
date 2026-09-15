@@ -36,9 +36,7 @@ def main():
     correlation_frame.to_csv(CORRELATION_PATH, encoding="utf-8-sig")
     correlation_values = correlation_frame.to_numpy(dtype=np.float64, copy=True)
     masked_correlations = np.ma.masked_invalid(correlation_values)
-    constant_columns = correlation_frame.columns[
-        correlation_frame.isna().all(axis=0)
-    ].tolist()
+    constant_columns = correlation_frame.columns[ correlation_frame.isna().all(axis=0) ].tolist()
 
     # 使用服务器现有中文字体绘制全部特征
     label_font = font_manager.FontProperties(fname=FONT_PATH, size=10)
@@ -49,37 +47,18 @@ def main():
 
     # 灰色单元格保留零方差特征的未定义相关系数
     figure, axis = plt.subplots(figsize=(36, 32))
-    image = axis.pcolormesh(
-        masked_correlations,
-        cmap=color_map,
-        vmin=-1.0,
-        vmax=1.0,
-        shading="nearest",
-    )
+    image = axis.pcolormesh(masked_correlations, cmap=color_map, vmin=-1.0, vmax=1.0, shading="nearest",)
     axis.set_aspect("equal")
     tick_positions = np.arange(len(columns))
     axis.set_xticks(tick_positions)
     axis.set_yticks(tick_positions)
-    axis.set_xticklabels(
-        columns,
-        rotation=55,
-        ha="right",
-        rotation_mode="anchor",
-        fontproperties=label_font,
-    )
+    axis.set_xticklabels(columns, rotation=55, ha="right", rotation_mode="anchor", fontproperties=label_font,)
     axis.set_yticklabels(columns, fontproperties=label_font)
     axis.tick_params(axis="both", which="both", length=0)
     axis.set_xlabel("特征", fontproperties=axis_font, labelpad=18)
     axis.set_ylabel("特征", fontproperties=axis_font, labelpad=18)
-    constant_text = "灰色表示相关系数未定义；零方差特征：" + "、".join(
-        constant_columns
-    )
-    axis.set_title(
-        f"风机 1 特征 Pearson 相关性热力图（全部 {len(feature_frame):,} 个样本）\n"
-        f"{constant_text}",
-        fontproperties=title_font,
-        pad=22,
-    )
+    constant_text = "灰色表示相关系数未定义；零方差特征：" + "、".join(constant_columns)
+    axis.set_title(f"风机 1 特征 Pearson 相关性热力图（全部 {len(feature_frame):,} 个样本）\n" f"{constant_text}", fontproperties=title_font, pad=22,)
 
     # 添加相关系数色标
     color_bar = figure.colorbar(image, ax=axis, fraction=0.035, pad=0.025)

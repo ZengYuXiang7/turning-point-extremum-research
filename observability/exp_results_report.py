@@ -48,20 +48,13 @@ def _validate_result_key(dataset: str, result_name: str) -> None:
             raise ValueError(f"{field} must be one safe path component, got {value!r}")
 
 
-def _validate_result_record(
-    result: dict[str, Any],
-    *,
-    require_significance: bool = True,
-) -> None:
+def _validate_result_record(result: dict[str, Any], *, require_significance: bool = True,) -> None:
     required_keys = REQUIRED_RESULT_KEYS if require_significance else REQUIRED_RESULT_KEYS - {"significance"}
     missing = required_keys - result.keys()
     if missing:
         raise ValueError(f"result record is missing keys: {sorted(missing)}")
     if result["contract_version"] != CONTRACT_VERSION:
-        raise ValueError(
-            f"result record requires contract_version={CONTRACT_VERSION!r}, "
-            f"got {result['contract_version']!r}"
-        )
+        raise ValueError(f"result record requires contract_version={CONTRACT_VERSION!r}, " f"got {result['contract_version']!r}")
     _validate_result_key(result["dataset"], result["result_name"])
     if not isinstance(result["model_name"], str) or not result["model_name"].strip():
         raise ValueError("model_name must be a non-empty string")
@@ -150,12 +143,7 @@ def _holm_adjust(p_values: list[float]) -> list[float]:
     return adjusted
 
 
-def build_dataset_significance(
-    dataset: str,
-    result_name: str,
-    result: dict[str, Any],
-    records_root: Path = Path("results") / "records",
-) -> list[dict[str, Any]]:
+def build_dataset_significance(dataset: str, result_name: str, result: dict[str, Any], records_root: Path = Path("results") / "records",) -> list[dict[str, Any]]:
     _validate_result_record(result, require_significance=False)
     if result["dataset"] != dataset or result["result_name"] != result_name:
         raise ValueError("dataset/result_name arguments must match the result record")
@@ -172,19 +160,13 @@ def build_dataset_significance(
         peer_result = json.loads(peer_path.read_text(encoding="utf-8"))
         _validate_result_record(peer_result)
         if peer_path.stem != peer_result["result_name"]:
-            raise ValueError(
-                f"record filename does not match result_name: {peer_path}"
-            )
+            raise ValueError(f"record filename does not match result_name: {peer_path}")
         if peer_result["condition"] != result["condition"]:
             continue
         peer_by_seed = _metric_values_by_seed(peer_result)
         metrics: dict[str, dict[str, Any]] = {}
         for metric_name in result["mean_std"]:
-            seeds = sorted(
-                seed
-                for seed in own_by_seed.keys() & peer_by_seed.keys()
-                if metric_name in own_by_seed[seed] and metric_name in peer_by_seed[seed]
-            )
+            seeds = sorted(seed for seed in own_by_seed.keys() & peer_by_seed.keys() if metric_name in own_by_seed[seed] and metric_name in peer_by_seed[seed])
             if len(seeds) < 2:
                 continue
             own_values = [own_by_seed[seed][metric_name] for seed in seeds]
@@ -210,17 +192,8 @@ def build_dataset_significance(
             metrics[metric_name] = metric_test
             all_metric_tests.append(metric_test)
         if metrics:
-            comparisons.append({
-                "against": peer_result["result_name"],
-                "test": "paired_two_sided_t_test",
-                "multiple_testing": "holm",
-                "metrics": metrics,
-            })
-    for metric_test, adjusted_p_value in zip(
-        all_metric_tests,
-        _holm_adjust([float(metric_test["p_value"]) for metric_test in all_metric_tests]),
-        strict=True,
-    ):
+            comparisons.append({ "against": peer_result["result_name"], "test": "paired_two_sided_t_test", "multiple_testing": "holm", "metrics": metrics, })
+    for metric_test, adjusted_p_value in zip(all_metric_tests, _holm_adjust([float(metric_test["p_value"]) for metric_test in all_metric_tests]), strict=True,):
         metric_test["p_value_holm"] = adjusted_p_value
     return comparisons
 
@@ -243,13 +216,7 @@ def write_result_report(path: Path, result: dict[str, Any]) -> None:
     ]
     lines.append(line("******************** Summary ********************"))
     summary_width = max(len(_metric_label(name)) for name in metric_names)
-    lines.extend(
-        line(
-            f"{_metric_label(name):<{summary_width}} : "
-            f"{metrics[name]['mean']:>9.4f} ± {metrics[name]['std']:>8.4f}"
-        )
-        for name in metric_names
-    )
+    lines.extend(line(f"{_metric_label(name):<{summary_width}} : " f"{metrics[name]['mean']:>9.4f} ± {metrics[name]['std']:>8.4f}") for name in metric_names)
     lines.append(line("******************** Significance ********************"))
     significance = result.get("significance", [])
     if not significance:
@@ -258,27 +225,13 @@ def write_result_report(path: Path, result: dict[str, Any]) -> None:
         lines.append(line("Paired two-sided t-test; Holm-adjusted p-values."))
         for comparison in significance:
             for metric_name, metric_test in comparison["metrics"].items():
-                lines.append(
-                    line(
-                        f"vs={comparison['against']} {_metric_label(metric_name)}: "
-                        f"delta={metric_test['mean_difference']:.4f} "
-                        f"t={_display_statistic(metric_test['t_statistic'])} "
-                        f"p={_display_pvalue(metric_test['p_value'])} "
-                        f"p_holm={_display_pvalue(metric_test['p_value_holm'])} "
-                        f"n={metric_test['n']}"
-                    )
-                )
+                lines.append(line(f"vs={comparison['against']} {_metric_label(metric_name)}: " f"delta={metric_test['mean_difference']:.4f} " f"t={_display_statistic(metric_test['t_statistic'])} " f"p={_display_pvalue(metric_test['p_value'])} " f"p_holm={_display_pvalue(metric_test['p_value_holm'])} " f"n={metric_test['n']}"))
     lines.append(line("******************** Rounds ********************"))
     for index, record in enumerate(result["rounds"], start=1):
         best = ", ".join(f"V-{_metric_label(name)}={float(value):.4f}" for name, value in record["best_valid"].items()) or "N/A"
         values = " ".join(f"{_metric_label(name)}={float(record['test_metrics'][name]):.4f}" for name in metric_names)
         checkpoint_name = Path(record["checkpoint"]).name
-        lines.append(
-            line(
-                f"R={index} S={record['seed']} BE={record['best_epoch']} "
-                f"{best} | {values} | CKPT={checkpoint_name}"
-            )
-        )
+        lines.append(line(f"R={index} S={record['seed']} BE={record['best_epoch']} " f"{best} | {values} | CKPT={checkpoint_name}"))
     lines.append(line("******************** Model Configuration ********************"))
     lines.extend(line(text) for text in _aligned_fields(list(result["model_config"].items())))
     lines.append(line("******************** Training Configuration ********************"))

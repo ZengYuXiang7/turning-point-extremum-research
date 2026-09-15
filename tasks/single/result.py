@@ -30,17 +30,7 @@ def select_model_metadata(model_name: str):
     return feature_fusion, moving_average_kernel, temporal_projection, purpose
 
 
-def write_power_result_contract(
-    args,
-    repository,
-    datasets,
-    checkpoint,
-    best_epoch,
-    best_mse,
-    history,
-    curve_overall,
-    pretraining,
-):
+def write_power_result_contract(args, repository, datasets, checkpoint, best_epoch, best_mse, history, curve_overall, pretraining,):
     # 写入 single 功率任务的正式 report 与 record。
     test_metrics = {
         "Acc30": curve_overall["strict_acc30"],
@@ -145,11 +135,7 @@ def write_power_result_contract(
         "significance": [],
         "rounds": rounds,
     }
-    result["significance"] = build_dataset_significance(
-        args.dataset_name,
-        args.result_name,
-        result,
-    )
+    result["significance"] = build_dataset_significance(args.dataset_name, args.result_name, result,)
     report_path = result_report_path(args.dataset_name, args.result_name)
     record_path = result_record_path(args.dataset_name, args.result_name)
     write_result_report(report_path, result)

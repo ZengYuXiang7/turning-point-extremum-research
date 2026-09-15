@@ -29,11 +29,7 @@ class FixedPowerModel(nn.Module):
         super().__init__()
         self.prediction = nn.Parameter(prediction)
 
-    def forward(
-        self,
-        past: torch.Tensor,
-        turbine_id: torch.Tensor,
-    ) -> torch.Tensor:
+    def forward(self, past: torch.Tensor, turbine_id: torch.Tensor,) -> torch.Tensor:
         prediction = self.prediction.unsqueeze(0).expand(past.shape[0], -1)
         return prediction
 
@@ -48,26 +44,8 @@ class TestPowerDBLoss(unittest.TestCase):
         weight = 0.5
 
         expected_mse = torch.mean((prediction - target) ** 2)
-        expected_loss = expected_mse + weight * objective(
-            prediction.unsqueeze(0),
-            target.unsqueeze(0),
-        )
-        loss, mse, _ = run_epoch(
-            model,
-            loader,
-            torch.device("cpu"),
-            None,
-            objective,
-            weight,
-            False,
-            torch.tensor([200.0]),
-            torch.tensor([1.0]),
-            0,
-            1,
-            True,
-            False,
-            False,
-        )
+        expected_loss = expected_mse + weight * objective(prediction.unsqueeze(0), target.unsqueeze(0),)
+        loss, mse, _ = run_epoch(model, loader, torch.device("cpu"), None, objective, weight, False, torch.tensor([200.0]), torch.tensor([1.0]), 0, 1, True, False, False,)
 
         self.assertAlmostEqual(loss, expected_loss.item(), places=6)
         self.assertAlmostEqual(mse, expected_mse.item(), places=6)
@@ -77,22 +55,7 @@ class TestPowerDBLoss(unittest.TestCase):
         loader = DataLoader(PowerSequenceDataset(torch.tensor([1.0])), batch_size=1)
         objective = DBLoss(alpha=0.2, beta=0.5)
 
-        loss, mse, _ = run_epoch(
-            model,
-            loader,
-            torch.device("cpu"),
-            torch.optim.SGD(model.parameters(), lr=0.1),
-            objective,
-            0.5,
-            True,
-            torch.tensor([200.0]),
-            torch.tensor([1.0]),
-            0,
-            1,
-            True,
-            False,
-            False,
-        )
+        loss, mse, _ = run_epoch(model, loader, torch.device("cpu"), torch.optim.SGD(model.parameters(), lr=0.1), objective, 0.5, True, torch.tensor([200.0]), torch.tensor([1.0]), 0, 1, True, False, False,)
 
         self.assertAlmostEqual(loss, 1.0, places=6)
         self.assertAlmostEqual(mse, 1.0, places=6)
@@ -101,12 +64,7 @@ class TestPowerDBLoss(unittest.TestCase):
     def test_patchmlp_all_features_forward(self):
         channels = 59
         power_index = 58
-        model = NoFutureWeatherModel(
-            "PatchMLPAllFeatures",
-            horizon=3,
-            channels=channels,
-            power_index=power_index,
-        )
+        model = NoFutureWeatherModel("PatchMLPAllFeatures", horizon=3, channels=channels, power_index=power_index,)
         past = torch.randn(2, HISTORY_STEPS, channels)
         turbine_id = torch.tensor([0, 1], dtype=torch.long)
 
