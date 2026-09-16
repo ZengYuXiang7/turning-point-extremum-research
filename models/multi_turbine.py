@@ -11,7 +11,7 @@ def select_backbone(args, repository, relation_weight):
         use_dtw_prior = bool(args.satra_use_dtw_prior)
         if not use_spatial_relation:
             use_dtw_prior = False
-        backbone = MultiTurbineBackbone(channels=len(repository.feature_names), history_steps=args.history_steps, horizon=args.horizon_steps, use_spatial_relation=use_spatial_relation, relation_weight=relation_weight, use_dtw_prior=use_dtw_prior, hidden_dim=args.satra_hidden_dim, depth=args.satra_depth, kernel_size=args.satra_kernel_size, heads=args.satra_heads, tower_layers=args.satra_tower_layers, dropout=args.satra_dropout, expert_top_k=args.satra_expert_top_k,)
+        backbone = MultiTurbineBackbone(channels=len(repository.feature_names), power_index=repository.power_index, history_steps=args.history_steps, horizon=args.horizon_steps, use_revin=bool(args.revin), use_spatial_relation=use_spatial_relation, relation_weight=relation_weight, use_dtw_prior=use_dtw_prior, hidden_dim=args.satra_hidden_dim, depth=args.satra_depth, kernel_size=args.satra_kernel_size, heads=args.satra_heads, tower_layers=args.satra_tower_layers, dropout=args.satra_dropout, expert_top_k=args.satra_expert_top_k,)
     
     elif args.model == "StockEcho":
         backbone = StockEchoNoFutureWeather(args.horizon_steps)

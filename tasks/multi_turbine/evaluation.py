@@ -8,6 +8,7 @@ from tqdm import tqdm
 import config as project_config
 from config import BASE_INTERVAL_SECONDS, PROJECT_ROOT
 from observability import result_record_path, result_report_path
+from observability.exp_progress import dynamic_tqdm_enabled
 from tasks.multi_turbine.result import write_power_result_contract
 from utils.metrics import metric_bundle, save_metrics
 
@@ -18,7 +19,7 @@ def collect_panel_predictions(args, model, loaders, device):
     truths = []
     turbines = []
     target_starts = []
-    batches = tqdm(loaders["test"], total=len(loaders["test"]), desc="test", disable=args.show_progress == 0, leave=False,)
+    batches = tqdm(loaders["test"], total=len(loaders["test"]), desc="test", disable=not dynamic_tqdm_enabled(args.tqdm), leave=False,)
     with torch.no_grad():
         for past, target, turbine_id, target_start in batches:
             past = past.to(device, non_blocking=True)
@@ -41,18 +42,12 @@ def collect_panel_predictions(args, model, loaders, device):
     return prediction_scaled, truth_scaled, turbine_ids, starts
 
 
-def restore_panel_power(repository, prediction_scaled, truth_scaled, turbine_ids):
-    # 各面板位置使用对应风机的训练段统计量还原功率。
-    mean_values = []
-    std_values = []
-    for turbine_index in turbine_ids:
-        series = repository.series[int(turbine_index)]
-        mean_values.append(series.power_mean)
-        std_values.append(series.power_std)
-    means = np.asarray(mean_values, dtype=np.float32)[:, None]
-    stds = np.asarray(std_values, dtype=np.float32)[:, None]
-    prediction = prediction_scaled * stds + means
-    truth = truth_scaled * stds + means
+def restore_panel_power(repository, prediction_scaled, truth_scaled):
+    # 预测与标签用全部风机训练段共享的功率统计量还原为 kW。
+    power_mean = repository.series[0].power_mean
+    power_std = repository.series[0].power_std
+    prediction = prediction_scaled * power_std + power_mean
+    truth = truth_scaled * power_std + power_mean
     return prediction, truth
 
 
@@ -64,7 +59,7 @@ def test_checkpoint(args, model, repository, datasets, loaders, device, checkpoi
     model.load_state_dict(state["model_state"])
     model.eval()
     prediction_scaled, truth_scaled, turbine_ids, starts = collect_panel_predictions(args, model, loaders, device)
-    prediction, truth = restore_panel_power(repository, prediction_scaled, truth_scaled, turbine_ids)
+    prediction, truth = restore_panel_power(repository, prediction_scaled, truth_scaled)
     np.savez_compressed(run_dir / "test_predictions.npz", prediction=prediction.astype(np.float32), truth=truth.astype(np.float32), turbine_id=(turbine_ids + 1).astype(np.int16), target_start_ns=starts,)
     metrics = metric_bundle(prediction, truth, turbine_ids)
     save_metrics(run_dir, metrics)
@@ -74,15 +69,14 @@ def test_checkpoint(args, model, repository, datasets, loaders, device, checkpoi
     record_path = ""
     if args.result_name:
         if args.mode == "train":
-            report_path, record_path = write_power_result_contract(args, repository, datasets, contract_checkpoint, best_epoch, best_mse, history, curve_overall, pretraining,)
+            report_path, record_path = write_power_result_contract(args, repository, datasets, contract_checkpoint, best_epoch, best_mse, best_acc30, history, curve_overall, pretraining,)
         else:
             report_path = result_report_path(args.dataset_name, args.result_name)
             record_path = result_record_path(args.dataset_name, args.result_name)
 
     best_val_acc30 = None
     if args.mode == "train":
-        if args.loss == "MSEAcc30":
-            best_val_acc30 = best_acc30
+        best_val_acc30 = best_acc30
     status = "complete"
     final_path = run_dir / "final.json"
     if args.mode == "test":

@@ -18,10 +18,10 @@ def build_task_components(args, device: torch.device, num_workers: int):
         if use_dtw_prior:
             use_dtw_prior = bool(args.satra_use_dtw_prior)
         if use_dtw_prior:
-            repository, datasets, loaders = make_multi_turbine_no_future_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers, pstr_relation_top_k=args.satra_prior_top_k, pstr_relation_candidate_k=args.satra_prior_candidate_k, pstr_relation_downsample=args.satra_prior_downsample, pstr_relation_band=args.satra_prior_band,)
+            repository, datasets, loaders = make_multi_turbine_no_future_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers, all_features=True, pstr_relation_top_k=args.satra_prior_top_k, pstr_relation_candidate_k=args.satra_prior_candidate_k, pstr_relation_downsample=args.satra_prior_downsample, pstr_relation_band=args.satra_prior_band,)
             relation_weight = repository.pstr_relation_weight
         else:
-            repository, datasets, loaders = make_multi_turbine_no_future_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers,)
+            repository, datasets, loaders = make_multi_turbine_no_future_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers, all_features=True,)
             relation_weight = None
     elif args.model == "StockEcho":
         repository, datasets, loaders = make_multi_turbine_no_future_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers,)

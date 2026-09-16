@@ -143,12 +143,15 @@ class StateConditionedPatternExpert(nn.Module):
     def forward(self, values: torch.Tensor) -> torch.Tensor:
         batch_size, turbine_count, history_steps, hidden_dim = values.shape
         flattened = values.reshape(batch_size * turbine_count, history_steps, hidden_dim)
+        
         encoded = self.encoder(flattened.transpose(1, 2)).transpose(1, 2)
+        
         encoded = self.dropout(encoded)
+        # 临时注释 experts 路由，先跑 encoder 直通效果：
         expanded = self.expand(encoded)
         routed = self.experts(expanded.reshape(batch_size * turbine_count, -1))
         output = self.reduce(routed.reshape(batch_size * turbine_count, history_steps, self.expert_dim))
-        output = output.reshape(batch_size, turbine_count, history_steps, hidden_dim)
+        output = encoded.reshape(batch_size, turbine_count, history_steps, hidden_dim)
         return output
 
 

@@ -4,7 +4,6 @@ import logging
 import torch
 
 import config as project_config
-from config import BASE_INTERVAL_SECONDS
 from utils.acc30_loss import Acc30BoundaryLoss
 from utils.dbloss import DBLoss
 from utils.reproducibility import seed_everything
@@ -54,15 +53,15 @@ def build_optimization(args, model, device):
     else:
         optimizer = torch.optim.Adam(trainable_parameters, lr=args.learning_rate)
 
-    select_acc30 = args.loss == "MSEAcc30"
-    if select_acc30:
-        scheduler_mode = "max"
-        selection_metric = "validation_strict_acc30"
-    else:
+    weather_task = args.scenario == "ForecastWeather"
+    if weather_task:
         scheduler_mode = "min"
         selection_metric = "validation_mse_scaled"
+    else:
+        scheduler_mode = "max"
+        selection_metric = "validation_strict_acc30"
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode=scheduler_mode, factor=0.5, patience=3,)
-    return objective, optimizer, scheduler, select_acc30, selection_metric
+    return objective, optimizer, scheduler, selection_metric
 
 
 def build_power_scales(repository, device):
@@ -82,17 +81,19 @@ def build_training_config(args, model, repository, datasets, model_uses_future_w
     oracle = args.scenario == "OracleFutureWeather"
     weather_task = args.scenario == "ForecastWeather"
     predicted_weather = args.scenario == "PredictedFutureWeather"
+    provided_weather = args.scenario == "ProvidedFutureWeather"
     no_future_weather = args.scenario == "NoFutureWeather"
     config = vars(args).copy()
     if args.pretrain:
         config["pretraining"] = pretraining
-    config["base_interval_seconds"] = BASE_INTERVAL_SECONDS
+    config["base_interval_seconds"] = repository.base_interval_seconds
     config["point_interval_seconds"] = project_config.POINT_INTERVAL_SECONDS
     config["history_steps"] = project_config.HISTORY_STEPS
     config["horizon_steps"] = args.horizon_steps
     config["oracle_future_weather"] = oracle
     config["weather_task"] = weather_task
     config["predicted_future_weather"] = predicted_weather
+    config["provided_future_weather"] = provided_weather
     config["selection_metric"] = selection_metric
     config["acc30_loss_weight"] = None
     config["acc30_loss_temperature"] = None

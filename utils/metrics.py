@@ -193,8 +193,8 @@ def point_metrics(prediction: np.ndarray, truth: np.ndarray) -> dict:
     }
 
 
-def metric_bundle(prediction: np.ndarray, truth: np.ndarray, turbine_ids: np.ndarray):
-    # 汇总总体、分机和 macro16 点误差指标，不执行 DTW/TDI。
+def metric_bundle(prediction: np.ndarray, truth: np.ndarray, turbine_ids: np.ndarray, entity_count: int = 16, entity_name: str = "turbine",):
+    # 汇总总体、分实体和宏平均点误差指标，不执行 DTW/TDI。
     rows = []
 
     curve_overall = point_metrics(prediction, truth)
@@ -214,12 +214,12 @@ def metric_bundle(prediction: np.ndarray, truth: np.ndarray, turbine_ids: np.nda
     endpoint_rmse_values = []
     endpoint_mape_values = []
 
-    for turbine_index in range(16):
+    for turbine_index in range(entity_count):
         mask = turbine_ids == turbine_index
         curve = point_metrics(prediction[mask], truth[mask])
         endpoint = point_metrics(prediction[mask, -1], truth[mask, -1])
-        rows.append({ "kind": "per_turbine_curve", "turbine_id": turbine_index + 1, "strict_acc30": curve["strict_acc30"], "strict_valid_points": curve["strict_valid_points"], "total_points": curve["total_points"], "strict_valid_fraction": curve["strict_valid_fraction"], "mae_kw": curve["mae_kw"], "mse_kw2": curve["mse_kw2"], "rmse_kw": curve["rmse_kw"], "mape": curve["mape"], })
-        rows.append({ "kind": "per_turbine_endpoint", "turbine_id": turbine_index + 1, "strict_acc30": endpoint["strict_acc30"], "strict_valid_points": endpoint["strict_valid_points"], "total_points": endpoint["total_points"], "strict_valid_fraction": endpoint["strict_valid_fraction"], "mae_kw": endpoint["mae_kw"], "mse_kw2": endpoint["mse_kw2"], "rmse_kw": endpoint["rmse_kw"], "mape": endpoint["mape"], })
+        rows.append({ "kind": f"per_{entity_name}_curve", "turbine_id": turbine_index + 1, "strict_acc30": curve["strict_acc30"], "strict_valid_points": curve["strict_valid_points"], "total_points": curve["total_points"], "strict_valid_fraction": curve["strict_valid_fraction"], "mae_kw": curve["mae_kw"], "mse_kw2": curve["mse_kw2"], "rmse_kw": curve["rmse_kw"], "mape": curve["mape"], })
+        rows.append({ "kind": f"per_{entity_name}_endpoint", "turbine_id": turbine_index + 1, "strict_acc30": endpoint["strict_acc30"], "strict_valid_points": endpoint["strict_valid_points"], "total_points": endpoint["total_points"], "strict_valid_fraction": endpoint["strict_valid_fraction"], "mae_kw": endpoint["mae_kw"], "mse_kw2": endpoint["mse_kw2"], "rmse_kw": endpoint["rmse_kw"], "mape": endpoint["mape"], })
         curve_acc30_values.append(curve["strict_acc30"])
         curve_mae_values.append(curve["mae_kw"])
         curve_mse_values.append(curve["mse_kw2"])
@@ -231,21 +231,22 @@ def metric_bundle(prediction: np.ndarray, truth: np.ndarray, turbine_ids: np.nda
         endpoint_rmse_values.append(endpoint["rmse_kw"])
         endpoint_mape_values.append(endpoint["mape"])
 
-    rows.append({ "kind": "macro16_curve", "turbine_id": -1, "strict_acc30": float(np.nanmean(curve_acc30_values)), "strict_valid_points": -1, "total_points": -1, "strict_valid_fraction": float("nan"), "mae_kw": float(np.nanmean(curve_mae_values)), "mse_kw2": float(np.nanmean(curve_mse_values)), "rmse_kw": float(np.nanmean(curve_rmse_values)), "mape": float(np.nanmean(curve_mape_values)), })
-    rows.append({ "kind": "macro16_endpoint", "turbine_id": -1, "strict_acc30": float(np.nanmean(endpoint_acc30_values)), "strict_valid_points": -1, "total_points": -1, "strict_valid_fraction": float("nan"), "mae_kw": float(np.nanmean(endpoint_mae_values)), "mse_kw2": float(np.nanmean(endpoint_mse_values)), "rmse_kw": float(np.nanmean(endpoint_rmse_values)), "mape": float(np.nanmean(endpoint_mape_values)), })
+    if entity_count > 1:
+        rows.append({ "kind": f"macro{entity_count}_curve", "turbine_id": -1, "strict_acc30": float(np.nanmean(curve_acc30_values)), "strict_valid_points": -1, "total_points": -1, "strict_valid_fraction": float("nan"), "mae_kw": float(np.nanmean(curve_mae_values)), "mse_kw2": float(np.nanmean(curve_mse_values)), "rmse_kw": float(np.nanmean(curve_rmse_values)), "mape": float(np.nanmean(curve_mape_values)), })
+        rows.append({ "kind": f"macro{entity_count}_endpoint", "turbine_id": -1, "strict_acc30": float(np.nanmean(endpoint_acc30_values)), "strict_valid_points": -1, "total_points": -1, "strict_valid_fraction": float("nan"), "mae_kw": float(np.nanmean(endpoint_mae_values)), "mse_kw2": float(np.nanmean(endpoint_mse_values)), "rmse_kw": float(np.nanmean(endpoint_rmse_values)), "mape": float(np.nanmean(endpoint_mape_values)), })
     return rows
 
 
-def save_metrics(root: Path, metrics_rows: list) -> None:
+def save_metrics(root: Path, metrics_rows: list, entity_name: str = "turbine") -> None:
     root.mkdir(parents=True, exist_ok=True)
     (root / "metrics.json").write_text(json.dumps(metrics_rows, ensure_ascii=False, indent=2), encoding="utf-8",)
-    with (root / "per_turbine_metrics.csv").open("w", encoding="utf-8-sig", newline="") as handle:
+    with (root / f"per_{entity_name}_metrics.csv").open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow([ "turbine_id", "scope", "strict_acc30", "valid_points", "total_points", "mae_kw", "mse_kw2", "rmse_kw", "mape", ])
+        writer.writerow([ f"{entity_name}_id", "scope", "strict_acc30", "valid_points", "total_points", "mae_kw", "mse_kw2", "rmse_kw", "mape", ])
         for row in metrics_rows:
-            if row["kind"] == "per_turbine_curve":
+            if row["kind"] == f"per_{entity_name}_curve":
                 scope = "curve"
-            elif row["kind"] == "per_turbine_endpoint":
+            elif row["kind"] == f"per_{entity_name}_endpoint":
                 scope = "endpoint"
             else:
                 continue

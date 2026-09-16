@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, Subset
 
 from config import PROJECT_ROOT
 from observability import CONTRACT_VERSION, result_checkpoint_path
+from observability.exp_progress import EpochProgressPolicy, dynamic_tqdm_enabled
 from tasks.single.pretrain_epoch import MaskedTokenPretraining, run_masked_epoch
 from tasks.single.pretrain_scheduler import build_pretrain_scheduler
 
@@ -44,11 +45,12 @@ def pretrain_power_encoder(args, model, repository, datasets, loaders, device, r
         
         optimizer = torch.optim.AdamW(pretrainer.parameters(), lr=args.pretrain_learning_rate,)
         scheduler, scheduler_steps_per_batch = build_pretrain_scheduler(args, optimizer, len(loaders["train"]),)
-        
+
+        progress = EpochProgressPolicy(dynamic_tqdm_enabled(args.tqdm), args.pretrain_epochs)
         for epoch in range(1, args.pretrain_epochs + 1):
             epoch_started = time.time()
-            train_mse = run_masked_epoch(pretrainer, loaders["train"], optimizer, device, args.mae_mask_ratio, args.seed + epoch, True, args.show_progress, epoch, scheduler, scheduler_steps_per_batch,)
-            val_mse = run_masked_epoch(pretrainer, validation_loader, optimizer, device, args.mae_mask_ratio, args.seed, False, args.show_progress, epoch, scheduler, scheduler_steps_per_batch,)
+            train_mse = run_masked_epoch(pretrainer, loaders["train"], optimizer, device, args.mae_mask_ratio, args.seed + epoch, True, progress.show_progress(), epoch, scheduler, scheduler_steps_per_batch,)
+            val_mse = run_masked_epoch(pretrainer, validation_loader, optimizer, device, args.mae_mask_ratio, args.seed, False, progress.show_progress(), epoch, scheduler, scheduler_steps_per_batch,)
 
             # 硬重启按batch更新，其余调度器按epoch更新
             if scheduler_steps_per_batch is False:
@@ -64,13 +66,11 @@ def pretrain_power_encoder(args, model, repository, datasets, loaders, device, r
             else:
                 wait += 1
 
-            # 按显式频率输出常规日志，选模事件立即打印
+            # 按首轮耗时确定频率输出常规日志，选模事件立即打印
             seconds = time.time() - epoch_started
             early_stop = wait >= args.pretrain_patience
-            log_epoch = epoch == 1 or epoch % args.print_freq == 0
-            if epoch == args.pretrain_epochs or improved:
-                log_epoch = True
-            if log_epoch or early_stop:
+            progress.observe(seconds)
+            if progress.should_log(epoch, extra=improved) or early_stop:
                 print(f"[Pretrain] epoch={epoch}/{args.pretrain_epochs} " f"train_MSE={train_mse:.6f} val_MSE={val_mse:.6f} " f"best={best_mse:.6f}@{best_epoch} saved={improved} " f"early_stop={early_stop} seconds={seconds:.2f}", flush=True,)
             history.append({ "epoch": epoch, "train_mse_scaled": train_mse, "validation_mse_scaled": val_mse, "seconds": seconds, "learning_rate": optimizer.param_groups[0]["lr"], "saved": improved, })
             history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")

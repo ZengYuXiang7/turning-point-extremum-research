@@ -50,9 +50,7 @@ def plot_feature_importance(predictor_frame, output_root):
             tick_label.set_fontproperties(label_font)
     figure.suptitle("16台风机 LightGBM Top20预测字段", fontproperties=font_manager.FontProperties(fname=FONT_PATH, size=18),)
     figure.tight_layout()
-    png_path = output_root / "feature_importance_top20.png"
     pdf_path = output_root / "feature_importance_top20.pdf"
-    figure.savefig(png_path, dpi=260, bbox_inches="tight", facecolor="white")
     figure.savefig(pdf_path, bbox_inches="tight", facecolor="white")
     plt.close(figure)
 
@@ -89,7 +87,6 @@ def plot_top_k_curve(top_k_frame, output_root):
     labels = error_labels + accuracy_labels
     error_axis.legend(handles, labels, prop=legend_font, loc="best")
     figure.tight_layout()
-    figure.savefig(output_root / "top_k_validation_curve.png", dpi=260, bbox_inches="tight", facecolor="white",)
     figure.savefig(output_root / "top_k_validation_curve.pdf", bbox_inches="tight", facecolor="white",)
     plt.close(figure)
 

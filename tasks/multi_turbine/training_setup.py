@@ -47,26 +47,18 @@ def build_optimization(args, model, device):
         if parameter.requires_grad:
             trainable_parameters.append(parameter)
     optimizer = torch.optim.Adam(trainable_parameters, lr=args.learning_rate)
-    select_acc30 = args.loss == "MSEAcc30"
-    if select_acc30:
-        scheduler_mode = "max"
-        selection_metric = "validation_strict_acc30"
-    else:
-        scheduler_mode = "min"
-        selection_metric = "validation_mse_scaled"
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode=scheduler_mode, factor=0.5, patience=3,)
-    return objective, optimizer, scheduler, select_acc30, selection_metric
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.5, patience=3,)
+    selection_metric = "validation_strict_acc30"
+    return objective, optimizer, scheduler, selection_metric
 
 
 def build_power_scales(repository, device):
-    # 联合面板按16个固定位置保存训练段功率统计量。
-    mean_values = []
-    std_values = []
-    for series in repository.series:
-        mean_values.append(series.power_mean)
-        std_values.append(series.power_std)
-    power_means = torch.tensor(mean_values, dtype=torch.float32, device=device)
-    power_stds = torch.tensor(std_values, dtype=torch.float32, device=device)
+    # 联合面板的功率标签共用全部风机训练段拟合的统计量。
+    turbine_count = len(repository.series)
+    power_mean = repository.series[0].power_mean
+    power_std = repository.series[0].power_std
+    power_means = torch.full((turbine_count,), power_mean, dtype=torch.float32, device=device)
+    power_stds = torch.full((turbine_count,), power_std, dtype=torch.float32, device=device)
     return power_means, power_stds
 
 
@@ -94,6 +86,11 @@ def build_training_config(args, model, repository, datasets, pretraining, compil
     config["test_windows"] = len(datasets["test"])
     config["feature_names"] = repository.feature_names
     config["input_feature_count"] = len(repository.feature_names)
+    feature_normalization = repository.normalization_description
+    if args.model == "MultiTurbine" and args.revin:
+        feature_normalization = f"{feature_normalization}_then_window_revin"
+    config["feature_normalization"] = feature_normalization
+    config["target_transform"] = repository.target_transform_description
     config["past_shape"] = list(sample_past.shape)
     config["target_shape"] = list(sample_target.shape)
     parameter_count = 0

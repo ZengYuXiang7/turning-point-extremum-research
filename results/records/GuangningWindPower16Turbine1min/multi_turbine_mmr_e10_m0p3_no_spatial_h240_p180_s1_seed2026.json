@@ -1,0 +1,133 @@
+{
+  "contract_version": "experiment-contract-v2",
+  "dataset": "GuangningWindPower16Turbine1min",
+  "result_name": "multi_turbine_mmr_e10_m0p3_no_spatial_h240_p180_s1_seed2026",
+  "model_name": "MultiTurbine",
+  "purpose": "遮蔽风机时间token重建热身后的SATRA PSTR-Net功率预测",
+  "condition": {
+    "domain": "wind_power_forecasting",
+    "scenario": "MultiTurbine",
+    "base_interval_seconds": 10,
+    "point_interval_seconds": 60,
+    "history_steps": 240,
+    "horizon_steps": 180,
+    "window_stride_steps": 1,
+    "loss": "MSE",
+    "dbloss_weight": 0.5
+  },
+  "model_config": {
+    "input_features": 56,
+    "feature_fusion": "state_conditioned_pattern_experts",
+    "moving_average_kernel": null,
+    "temporal_projection": "residual_temporal_cnn_plus_top3_moe",
+    "turbine_embedding": false,
+    "turbine_embedding_relation": "none",
+    "embedding_relation_mix_initial": null,
+    "revin": true,
+    "satra_hidden_dim": 64,
+    "satra_depth": 10,
+    "satra_kernel_size": 3,
+    "satra_heads": 4,
+    "satra_tower_layers": 1,
+    "satra_expert_top_k": 3,
+    "satra_use_spatial_relation": true,
+    "spatial_relation": "semantic_cross_turbine_transformer",
+    "satra_use_dtw_prior": false,
+    "satra_prior": "disabled"
+  },
+  "train_config": {
+    "seed": 2026,
+    "epochs": 10,
+    "patience": 3,
+    "batch_size": 128,
+    "learning_rate": 0.001,
+    "num_workers": 4,
+    "loss": "MSE",
+    "dbloss_weight": 0.5,
+    "selection_metric": "validation_strict_acc30",
+    "pretrain_epochs": 5,
+    "pretrain_learning_rate": 0.0001,
+    "pretrain_lr_scheduler": "cosine_hard_restarts",
+    "mae_mask_ratio": 0.3,
+    "pretrain_patience": 3,
+    "pretrain_selection_metric": "fixed_mask_validation_reconstruction_mse",
+    "pretrain_checkpoint": "checkpoints/GuangningWindPower16Turbine1min/multi_turbine_mmr_e10_m0p3_no_spatial_h240_p180_s1_seed2026/round_1_satra_pretrain.pt",
+    "pretrain_best_epoch": 5,
+    "pretrain_normalization": "per_turbine_train_standard_scaler"
+  },
+  "data_config": {
+    "source": "dataset/processed/turbine_01.npy ... turbine_16.npy",
+    "available_samples": 189303,
+    "split": "chronological_70_10_20",
+    "split_seeds": "none",
+    "train_samples": 132637,
+    "valid_samples": 18829,
+    "test_samples": 37837,
+    "features": "发电机-发电机非驱动端轴承温度, 变桨轮毂-变桨电机3电流, 传动链-齿轮箱油温, 机舱-机舱侧向振动幅度, 变桨轮毂-2#桨电机温度, 偏航系统-机舱位置, 变桨轮毂-变桨电池柜1温度, 传动链-主轴转速, 变流器-电网频率, 机舱-舱内温度, 变流器-功率因数, 传动链-齿轮箱高速轴非驱动端轴承温度, 变流器-网侧L1相电压, 变流器-网侧L3相电流, 传动链-齿轮箱中速轴驱动端轴承温度, 变流器-网侧L2相电压, 发电机-发电机定子U相线圈温度, 塔筒-塔底温度, 发电机-发电机定子W相线圈温度, 传动链-齿轮箱油路进入口温度, 发电机-发电机驱动端轴承温度, 变流器-网侧L2相电流, 传动链-齿轮箱中速轴非驱动端轴承温度, 变桨轮毂-1#桨叶角度, 变桨轮毂-3#桨叶角度, 传动链-齿轮箱油路滤网前油压, 变桨轮毂-变桨电池2电压, 风机-环境温度, 机舱-机舱轴向振动幅度, 偏航系统-对风角度, 风机-实时风速, 偏航系统-扭揽角度, 变桨轮毂-3#桨电机温度, 发电机-发电机转速, 风机-理论功率-计算, 变桨轮毂-1#桨电机温度, 变桨轮毂-变桨电池3电压, 塔筒-塔底控制柜温度, 变桨轮毂-变桨电机1电流, 风机-实时风向, 传动链-主轴承温度1, 发电机-发电机定子V相线圈温度, 风机-总发电量, 传动链-齿轮箱高速轴驱动端轴承温度, 变桨轮毂-变桨电机2电流, 变桨轮毂-变桨电池1电压, 变桨轮毂-变桨电池柜3温度, 风机-Q, 变桨轮毂-轮毂温度, 传动链-液压站压力, 变流器-网侧L1相电流, 变流器-网侧L3相电压, 变桨轮毂-2#桨叶角度, 变桨轮毂-变桨电池柜2温度, 传动链-齿轮箱入口油压, 风机-P",
+    "feature_normalization": "per_turbine_train_standard_scaler_then_window_revin",
+    "target": "风机-P",
+    "target_transform": "per_turbine_train_standard_scaler"
+  },
+  "mean_std": {
+    "Acc30": {
+      "mean": 48.01882321199055,
+      "std": 0.0
+    },
+    "MAE": {
+      "mean": 486.18207088860413,
+      "std": 0.0
+    },
+    "MAPE": {
+      "mean": 63.379423409756086,
+      "std": 0.0
+    },
+    "MSE": {
+      "mean": 688055.5710312941,
+      "std": 0.0
+    },
+    "RMSE": {
+      "mean": 829.4911518704067,
+      "std": 0.0
+    }
+  },
+  "significance": [],
+  "rounds": [
+    {
+      "seed": 2026,
+      "best_epoch": 2,
+      "best_valid": {
+        "Acc30": 37.954507039364856,
+        "MSE_scaled": 0.26404425792010394
+      },
+      "test_metrics": {
+        "Acc30": 48.01882321199055,
+        "MAE": 486.18207088860413,
+        "MSE": 688055.5710312941,
+        "RMSE": 829.4911518704067,
+        "MAPE": 63.379423409756086
+      },
+      "checkpoint": "checkpoints/GuangningWindPower16Turbine1min/multi_turbine_mmr_e10_m0p3_no_spatial_h240_p180_s1_seed2026/round_1.pt",
+      "early_stop": {
+        "patience": 3,
+        "completed_epochs": 5
+      },
+      "pretraining": {
+        "stage": "masked_market_reconstruction",
+        "best_epoch": 5,
+        "best_validation_mse_scaled": 0.06937966801741643,
+        "completed_epochs": 5,
+        "mask_mode": "random_turbine_time_tokens_all_features",
+        "mask_ratio": 0.3,
+        "learning_rate": 0.0001,
+        "lr_scheduler": "cosine_hard_restarts",
+        "normalization": "per_turbine_train_standard_scaler",
+        "validation_mask_seed": 2026,
+        "train_windows": 132637,
+        "validation_windows": 18589,
+        "checkpoint": "checkpoints/GuangningWindPower16Turbine1min/multi_turbine_mmr_e10_m0p3_no_spatial_h240_p180_s1_seed2026/round_1_satra_pretrain.pt",
+        "history": ".runs/WeatherComparison/MultiTurbine/MultiTurbine/MSE/GuangningWindPower16Turbine1min/pretrain_e10_m0p3_no_spatial/h240_p180_s1_seed2026/satra_pretrain_history.json",
+        "seconds": 739.7589654922485
+      }
+    }
+  ]
+}

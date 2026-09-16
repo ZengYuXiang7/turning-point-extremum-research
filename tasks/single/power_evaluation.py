@@ -6,8 +6,9 @@ import torch
 from tqdm import tqdm
 
 import config as project_config
-from config import BASE_INTERVAL_SECONDS, PROJECT_ROOT
+from config import PROJECT_ROOT
 from observability import result_record_path, result_report_path
+from observability.exp_progress import dynamic_tqdm_enabled
 from tasks.single.result import write_power_result_contract
 from utils.metrics import metric_bundle, save_metrics
 
@@ -18,7 +19,7 @@ def collect_predictions(args, model, loaders, device, model_uses_future_weather)
     truths = []
     turbines = []
     target_starts = []
-    batches = tqdm(loaders["test"], total=len(loaders["test"]), desc="test", disable=args.show_progress == 0, leave=False,)
+    batches = tqdm(loaders["test"], total=len(loaders["test"]), desc="test", disable=not dynamic_tqdm_enabled(args.tqdm), leave=False,)
     no_future_weather = args.scenario == "NoFutureWeather"
     with torch.no_grad():
         for batch in batches:
@@ -62,29 +63,45 @@ def restore_power(repository, prediction_scaled, truth_scaled, turbine_ids):
     return prediction, truth
 
 
+def collect_provided_power_baseline(repository, target_starts, horizon: int):
+    # 甲方超短期功率预测按同一批目标时间对齐，作为独立对照而非模型输入。
+    series_times = repository.series[0].times
+    start_indices = np.searchsorted(series_times, target_starts)
+    horizon_offsets = np.arange(horizon, dtype=np.int64)
+    baseline_indices = start_indices[:, None] + horizon_offsets[None, :]
+    baseline = repository.provided_power_forecast_kw[baseline_indices]
+    return baseline
+
+
 def evaluate_power(args, model, repository, datasets, loaders, device, checkpoint, contract_checkpoint, best_epoch, best_mse, best_acc30, history, pretraining, model_uses_future_weather,):
     # Single 功率程序保存预测、指标和正式结果契约。
     run_dir = Path(args.run_dir)
     prediction_scaled, truth_scaled, turbine_ids, starts = collect_predictions(args, model, loaders, device, model_uses_future_weather)
     prediction, truth = restore_power(repository, prediction_scaled, truth_scaled, turbine_ids)
     np.savez_compressed(run_dir / "test_predictions.npz", prediction=prediction.astype(np.float32), truth=truth.astype(np.float32), turbine_id=(turbine_ids + 1).astype(np.int16), target_start_ns=starts,)
-    metrics = metric_bundle(prediction, truth, turbine_ids)
-    save_metrics(run_dir, metrics)
+    entity_count = len(repository.series)
+    metrics = metric_bundle(prediction, truth, turbine_ids, entity_count, repository.entity_name,)
+    save_metrics(run_dir, metrics, repository.entity_name)
     curve_overall = metrics[0]
+    provided_baseline_metrics = []
+    if args.scenario == "ProvidedFutureWeather":
+        provided_baseline = collect_provided_power_baseline(repository, starts, args.horizon_steps,)
+        provided_baseline_metrics = metric_bundle(provided_baseline, truth, turbine_ids, entity_count, repository.entity_name,)
+        baseline_path = run_dir / "provided_power_baseline_metrics.json"
+        baseline_path.write_text(json.dumps(provided_baseline_metrics, ensure_ascii=False, indent=2), encoding="utf-8",)
 
     report_path = ""
     record_path = ""
     if args.result_name:
         if args.mode == "train":
-            report_path, record_path = write_power_result_contract(args, repository, datasets, contract_checkpoint, best_epoch, best_mse, history, curve_overall, pretraining,)
+            report_path, record_path = write_power_result_contract(args, repository, datasets, contract_checkpoint, best_epoch, best_mse, best_acc30, history, curve_overall, pretraining,)
         else:
             report_path = result_report_path(args.dataset_name, args.result_name)
             record_path = result_record_path(args.dataset_name, args.result_name)
 
     best_val_acc30 = None
     if args.mode == "train":
-        if args.loss == "MSEAcc30":
-            best_val_acc30 = best_acc30
+        best_val_acc30 = best_acc30
     status = "complete"
     final_path = run_dir / "final.json"
     if args.mode == "test":
@@ -93,6 +110,9 @@ def evaluate_power(args, model, repository, datasets, loaders, device, checkpoin
     weather_forecast_dir = ""
     if args.scenario == "PredictedFutureWeather":
         weather_forecast_dir = args.weather_forecast_dir
+    provided_weather_dir = ""
+    if args.scenario == "ProvidedFutureWeather":
+        provided_weather_dir = args.provided_weather_dir
     final = {
         "status": status,
         "mode": args.mode,
@@ -101,7 +121,7 @@ def evaluate_power(args, model, repository, datasets, loaders, device, checkpoin
         "loss": args.loss,
         "history_steps": project_config.HISTORY_STEPS,
         "horizon_steps": args.horizon_steps,
-        "base_interval_seconds": BASE_INTERVAL_SECONDS,
+        "base_interval_seconds": repository.base_interval_seconds,
         "point_interval_seconds": project_config.POINT_INTERVAL_SECONDS,
         "seed": args.seed,
         "best_epoch": best_epoch,
@@ -112,7 +132,9 @@ def evaluate_power(args, model, repository, datasets, loaders, device, checkpoin
         "report": str(report_path),
         "record": str(record_path),
         "weather_forecast_dir": weather_forecast_dir,
+        "provided_weather_dir": provided_weather_dir,
         "metrics": metrics,
+        "provided_power_baseline_metrics": provided_baseline_metrics,
     }
     final_path.write_text(json.dumps(final, ensure_ascii=False, indent=2), encoding="utf-8")
 

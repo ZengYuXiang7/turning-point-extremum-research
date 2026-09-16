@@ -4,20 +4,20 @@ import time
 import torch
 
 from observability import CONTRACT_VERSION, result_checkpoint_path
+from observability.exp_progress import EpochProgressPolicy, dynamic_tqdm_enabled
 from tasks.single.epoch import run_epoch
 
 
-def validation_improved(select_acc30, val_mse, val_acc30, best_mse, best_acc30):
-    # Acc30 任务先比较准确率，其余任务直接比较验证 MSE。
-    if select_acc30:
-        if val_acc30 > best_acc30 + 1e-10:
-            improved = True
-        elif abs(val_acc30 - best_acc30) <= 1e-10:
-            improved = val_mse < best_mse - 1e-10
-        else:
-            improved = False
-    else:
+def validation_improved(weather_task, val_mse, val_acc30, best_mse, best_acc30):
+    # 天气任务按 MSE 选模，功率任务固定以 Acc30 为主指标。
+    if weather_task:
         improved = val_mse < best_mse - 1e-10
+    elif val_acc30 > best_acc30 + 1e-10:
+        improved = True
+    elif abs(val_acc30 - best_acc30) <= 1e-10:
+        improved = val_mse < best_mse - 1e-10
+    else:
+        improved = False
     return improved
 
 
@@ -33,7 +33,7 @@ def checkpoint_model_state(args, model):
     return model_state
 
 
-def fit_model(args, model, datasets, loaders, device, model_uses_future_weather, objective, optimizer, scheduler, select_acc30, power_means, power_stds, config, run_dir,):
+def fit_model(args, model, datasets, loaders, device, model_uses_future_weather, objective, optimizer, scheduler, power_means, power_stds, config, run_dir,):
     # Single 程序独立执行训练、选模与早停。
     weather_task = args.scenario == "ForecastWeather"
     no_future_weather = args.scenario == "NoFutureWeather"
@@ -48,16 +48,18 @@ def fit_model(args, model, datasets, loaders, device, model_uses_future_weather,
         contract_checkpoint = result_checkpoint_path(args.dataset_name, args.result_name, 1)
         contract_checkpoint.parent.mkdir(parents=True, exist_ok=True)
 
+    progress = EpochProgressPolicy(dynamic_tqdm_enabled(args.tqdm), args.epochs)
     for epoch in range(1, args.epochs + 1):
         started = time.time()
-        _, train_mse, train_acc30 = run_epoch(model, loaders["train"], device, optimizer, objective, args.dbloss_weight, True, power_means, power_stds, args.show_progress, epoch, no_future_weather, model_uses_future_weather, weather_task,)
-        _, val_mse, val_acc30 = run_epoch(model, loaders["val"], device, optimizer, objective, args.dbloss_weight, False, power_means, power_stds, args.show_progress, epoch, no_future_weather, model_uses_future_weather, weather_task,)
-        if select_acc30:
-            scheduler.step(val_acc30)
-        else:
+        _, train_mse, train_acc30 = run_epoch(model, loaders["train"], device, optimizer, objective, args.dbloss_weight, True, power_means, power_stds, progress.show_progress(), epoch, no_future_weather, model_uses_future_weather, weather_task,)
+        _, val_mse, val_acc30 = run_epoch(model, loaders["val"], device, optimizer, objective, args.dbloss_weight, False, power_means, power_stds, progress.show_progress(), epoch, no_future_weather, model_uses_future_weather, weather_task,)
+        if weather_task:
             scheduler.step(val_mse)
+        else:
+            scheduler.step(val_acc30)
 
         seconds = time.time() - started
+        progress.observe(seconds)
         if weather_task:
             record = {
                 "task": "ForecastWeather",
@@ -81,16 +83,13 @@ def fit_model(args, model, datasets, loaders, device, model_uses_future_weather,
             }
             tag = "Power"
         history.append(record)
-        log_epoch = epoch == 1 or epoch % 10 == 0
-        if epoch == args.epochs:
-            log_epoch = True
-        if log_epoch:
+        if progress.should_log(epoch):
             if weather_task:
                 print(f"[{tag}] epoch {epoch}/{args.epochs} train_mse={train_mse:.6f} " f"val_mse={val_mse:.6f} lr={optimizer.param_groups[0]['lr']:.1e} " f"{seconds:.1f}s", flush=True,)
             else:
                 print(f"[{tag}] epoch {epoch}/{args.epochs} train_mse={train_mse:.6f} " f"train_acc30={train_acc30:.2f}% val_mse={val_mse:.6f} " f"val_acc30={val_acc30:.2f}% " f"lr={optimizer.param_groups[0]['lr']:.1e} {seconds:.1f}s", flush=True,)
 
-        improved = validation_improved(select_acc30, val_mse, val_acc30, best_mse, best_acc30)
+        improved = validation_improved(weather_task, val_mse, val_acc30, best_mse, best_acc30)
         if improved:
             best_mse = val_mse
             best_acc30 = val_acc30
@@ -105,7 +104,7 @@ def fit_model(args, model, datasets, loaders, device, model_uses_future_weather,
                 "result_name": args.result_name,
                 "model_name": args.model,
                 "seed": args.seed,
-                "target_transform": "per_turbine_train_standard_scaler",
+                "target_transform": datasets["train"].repository.target_transform_description,
             }
             torch.save(payload, checkpoint)
             if args.result_name:

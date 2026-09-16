@@ -22,9 +22,13 @@ def main():
 
     # 训练结束后用同一个联合窗口生成十台风机预测图。
     if args.mode == "train":
-        from tasks.multi_turbine.visualization import visualize_checkpoint_predictions
+        if args.visualize_after_train:
+            from tasks.multi_turbine.visualization import (
+                FIGURE_OUTPUT_DIRECTORY,
+                visualize_checkpoint_predictions,
+            )
 
-        visualize_checkpoint_predictions(Path(args.run_dir), args.visualization_split, args.visualization_seed, args.visualization_device,)
+            visualize_checkpoint_predictions(Path(args.run_dir), args.visualization_split, args.visualization_seed, args.visualization_device, FIGURE_OUTPUT_DIRECTORY, None,)
 
 
 if __name__ == "__main__":

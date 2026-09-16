@@ -15,6 +15,8 @@ def add_task_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--satra-tower-layers", type=int, default=1)
     parser.add_argument("--satra-dropout", type=float, default=0.1)
     parser.add_argument("--satra-expert-top-k", type=int, default=3)
+    parser.add_argument("--revin", type=int, choices=(0, 1), default=1)
+    parser.add_argument("--visualize-after-train", type=int, choices=(0, 1), default=1)
     parser.add_argument("--satra-use-spatial-relation", type=int, choices=(0, 1), default=1)
     parser.add_argument("--satra-use-dtw-prior", type=int, choices=(0, 1), default=0)
     parser.add_argument("--satra-prior-top-k", type=int, default=4)

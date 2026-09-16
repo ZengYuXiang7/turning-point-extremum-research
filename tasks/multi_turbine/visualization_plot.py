@@ -7,7 +7,7 @@ import numpy as np
 DISPLAY_TURBINE_COUNT = 10
 
 
-def save_prediction_figure(output_pdf_path: Path, output_png_path: Path, config, split: str, selection_seed: int, checkpoint_epoch: int, panel_dataset_index: int, history_power_kw: np.ndarray, truth_power_kw: np.ndarray, prediction_power_kw: np.ndarray, display_turbine_id: np.ndarray,) -> None:
+def save_prediction_figure(output_pdf_path: Path, config, split: str, selection_seed: int, checkpoint_epoch: int, panel_dataset_index: int, history_power_kw: np.ndarray, truth_power_kw: np.ndarray, prediction_power_kw: np.ndarray, display_turbine_id: np.ndarray,) -> None:
     # 两行五列展示同一个联合窗口内前10台风机的预测曲线。
     history_steps = history_power_kw.shape[1]
     horizon_steps = truth_power_kw.shape[1]
@@ -59,5 +59,4 @@ def save_prediction_figure(output_pdf_path: Path, output_png_path: Path, config,
     figure.suptitle(f"{config['model']} / {split} / shared panel window {panel_dataset_index} / " f"seed {selection_seed} / epoch {checkpoint_epoch} / " f"seq_len={history_steps}, pred_len={horizon_steps}", fontsize=15, y=0.99,)
     figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.89))
     figure.savefig(output_pdf_path, format="pdf", bbox_inches="tight")
-    figure.savefig(output_png_path, dpi=180, bbox_inches="tight")
     plt.close(figure)

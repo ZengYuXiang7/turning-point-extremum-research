@@ -11,12 +11,16 @@ from tasks.single.oracle_future_dataset import make_oracle_future_weather_loader
 from tasks.single.predicted_future_weather_dataset import (
     make_predicted_future_weather_loaders,
 )
+from tasks.single.provided_future_weather_dataset import (
+    make_provided_future_weather_loaders,
+)
 from tasks.single.trainer import prepare_task_runtime, train_task
 
 
 def build_task_components(args, device: torch.device, num_workers: int):
     weather_task = args.scenario == "ForecastWeather"
     predicted_weather = args.scenario == "PredictedFutureWeather"
+    provided_weather = args.scenario == "ProvidedFutureWeather"
     oracle = args.scenario == "OracleFutureWeather"
     all_features = args.model in (
         "DLinearAllFeatures",
@@ -29,6 +33,8 @@ def build_task_components(args, device: torch.device, num_workers: int):
         repository, datasets, loaders = make_forecast_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers,)
     elif predicted_weather:
         repository, datasets, loaders = make_predicted_future_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers, weather_forecast_dir=args.weather_forecast_dir,)
+    elif provided_weather:
+        repository, datasets, loaders = make_provided_future_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers, provided_weather_dir=args.provided_weather_dir,)
     else:
         # 常规功率任务按未来天气口径读取单风机窗口。
         if oracle:
@@ -37,7 +43,7 @@ def build_task_components(args, device: torch.device, num_workers: int):
             repository, datasets, loaders = make_no_future_weather_loaders(horizon=args.horizon_steps, batch_size=args.batch_size, num_workers=num_workers, all_features=all_features, correlated_features=correlated_features,)
 
     model = SingleModel(args, repository).to(device)
-    model_uses_future_weather = weather_task or predicted_weather or oracle
+    model_uses_future_weather = weather_task or predicted_weather or provided_weather or oracle
 
     return repository, datasets, loaders, model, model_uses_future_weather
 

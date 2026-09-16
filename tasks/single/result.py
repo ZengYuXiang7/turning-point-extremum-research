@@ -1,4 +1,3 @@
-from config import BASE_INTERVAL_SECONDS
 from observability import (
     CONTRACT_VERSION,
     aggregate_test_metrics,
@@ -30,7 +29,7 @@ def select_model_metadata(model_name: str):
     return feature_fusion, moving_average_kernel, temporal_projection, purpose
 
 
-def write_power_result_contract(args, repository, datasets, checkpoint, best_epoch, best_mse, history, curve_overall, pretraining,):
+def write_power_result_contract(args, repository, datasets, checkpoint, best_epoch, best_mse, best_acc30, history, curve_overall, pretraining,):
     # 写入 single 功率任务的正式 report 与 record。
     test_metrics = {
         "Acc30": curve_overall["strict_acc30"],
@@ -42,7 +41,7 @@ def write_power_result_contract(args, repository, datasets, checkpoint, best_epo
     round_record = {
         "seed": args.seed,
         "best_epoch": best_epoch,
-        "best_valid": {"MSE_scaled": best_mse},
+        "best_valid": {"Acc30": best_acc30, "MSE_scaled": best_mse},
         "test_metrics": test_metrics,
         "checkpoint": checkpoint.as_posix(),
         "early_stop": {
@@ -59,7 +58,7 @@ def write_power_result_contract(args, repository, datasets, checkpoint, best_epo
     condition = {
         "domain": "wind_power_forecasting",
         "scenario": args.scenario,
-        "base_interval_seconds": BASE_INTERVAL_SECONDS,
+        "base_interval_seconds": repository.base_interval_seconds,
         "point_interval_seconds": args.point_interval_seconds,
         "history_steps": args.history_steps,
         "horizon_steps": args.horizon_steps,
@@ -70,15 +69,17 @@ def write_power_result_contract(args, repository, datasets, checkpoint, best_epo
     feature_fusion, moving_average_kernel, temporal_projection, purpose = (
         select_model_metadata(args.model)
     )
+    if args.scenario == "ProvidedFutureWeather":
+        purpose = "历史场站数据与甲方未来预测风速的功率预测"
     model_config = {
         "input_features": len(repository.feature_names),
         "feature_fusion": feature_fusion,
         "moving_average_kernel": moving_average_kernel,
         "temporal_projection": temporal_projection,
-        "turbine_embedding": True,
+        "turbine_embedding": len(repository.series) > 1,
         "turbine_embedding_relation": "none",
         "embedding_relation_mix_initial": None,
-        "revin": True,
+        "revin": args.scenario == "NoFutureWeather",
     }
     train_config = {
         "seed": args.seed,
@@ -89,7 +90,7 @@ def write_power_result_contract(args, repository, datasets, checkpoint, best_epo
         "num_workers": args.num_workers,
         "loss": args.loss,
         "dbloss_weight": args.dbloss_weight,
-        "selection_metric": "validation_mse_scaled",
+        "selection_metric": "validation_strict_acc30",
     }
     if args.pretrain:
         purpose = "随机历史时间token重建热身后的PatchMLP功率预测"
@@ -107,19 +108,17 @@ def write_power_result_contract(args, repository, datasets, checkpoint, best_epo
         train_config["pretrain_normalization"] = pretraining["normalization"]
 
     data_config = {
-        "source": "dataset/processed/turbine_01.npy ... turbine_16.npy",
+        "source": repository.source_description,
         "available_samples": available_samples,
-        "split": "chronological_70_10_20",
+        "split": repository.split_description,
         "split_seeds": "none",
         "train_samples": len(datasets["train"]),
         "valid_samples": len(datasets["val"]),
         "test_samples": len(datasets["test"]),
         "features": ", ".join(repository.feature_names),
-        "feature_normalization": (
-            "per_turbine_train_standard_scaler_then_window_revin"
-        ),
-        "target": "风机-P",
-        "target_transform": "per_turbine_train_standard_scaler",
+        "feature_normalization": repository.normalization_description,
+        "target": repository.target_name,
+        "target_transform": repository.target_transform_description,
     }
     result = {
         "contract_version": CONTRACT_VERSION,

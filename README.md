@@ -25,6 +25,7 @@ StockEcho 位于 `models/multi_turbine_impl/stockecho.py`，包括因果时序�
 项目迁入的 PSTR-Net 设计：每台风机先经过
 State-Conditioned Pattern Expert（残差时序 CNN 与六个异构专家的 Top-3 路由），再在每个
 历史时刻经过关注全部风机的语义 Transformer 塔，按“特征到功率、历史到预测步”输出多步功率。
+训练与测试均读取每台风机原始的全部 56 个历史特征，其中包含历史功率；预测目标仍为未来功率。
 语义塔默认开启；传入 `--satra-use-spatial-relation 0` 时，SPE 直接连接预测头，不构建任何
 跨风机注意力。
 该模型没有风机 ID 嵌入，风机身份由输入顺序保留。
@@ -37,8 +38,8 @@ State-Conditioned Pattern Expert（残差时序 CNN 与六个异构专家的 Top
 env -u LD_LIBRARY_PATH uv run python run_multi.py \
   --mode train --model MultiTurbine --scenario MultiTurbine --loss MSE \
   --point-interval-seconds 900 --history-steps 16 --horizon-steps 4 \
-  --window-stride-steps 1 --seed 2026 --epochs 100 --patience 20 \
-  --batch-size 32 --learning-rate 0.001 --num-workers 4 --show-progress 1 \
+  --window-stride-steps 1 --seed 2026 --epochs 20 --patience 3 \
+  --batch-size 32 --learning-rate 0.001 --num-workers 4 --tqdm 1 \
   --dataset-name GuangningWindPower16Turbine15min \
   --result-name multi_turbine_h16_p4_s1_seed2026
 ```
@@ -109,7 +110,7 @@ PYTHON=/home/xuke/.conda/envs/lzh_3090/bin/python GPU=0 \
 - 气象口径：NoFutureWeather；历史中可使用已观测的气象和SCADA特征，预测窗口内不使用任何协变量。
 - 损失：MSE、DBLoss；StockEcho另包含MSEAcc30实验。
 - 随机种子：2026。
-- 最大100轮，验证集MSE早停，耐心值10。
+- 最大20轮，验证集MSE早停，耐心值3。
 - Strict ACC30仅统计真实功率严格大于100 kW的点。
 
 ## 数据划分
@@ -125,36 +126,36 @@ cd /path/to/ElectricityForecasting
 uv run python generate_data.py
 
 # DLinear训练
-bash "scripts/noweather/length_prediction/15min/9.14 dlinear_correlation_ablation_train.sh"
-bash "scripts/noweather/length_prediction/10min/9.14 dlinear_all_features_train.sh"
-bash "scripts/noweather/length_prediction/5min/9.14 dlinear_all_features_train.sh"
-bash "scripts/noweather/length_prediction/1min/9.14 dlinear_all_features_train.sh"
+bash "scripts/noweather/length_prediction/15min/dlinear_correlation_ablation_train.sh"
+bash "scripts/noweather/length_prediction/10min/dlinear_all_features_train.sh"
+bash "scripts/noweather/length_prediction/5min/dlinear_all_features_train.sh"
+bash "scripts/noweather/length_prediction/1min/dlinear_all_features_train.sh"
 
 # DLinear测试已有checkpoint
-bash "scripts/noweather/length_prediction/15min/9.14 dlinear_correlation_ablation_test.sh"
-bash "scripts/noweather/length_prediction/10min/9.14 dlinear_all_features_test.sh"
-bash "scripts/noweather/length_prediction/5min/9.14 dlinear_all_features_test.sh"
-bash "scripts/noweather/length_prediction/1min/9.14 dlinear_all_features_test.sh"
+bash "scripts/noweather/length_prediction/15min/dlinear_correlation_ablation_test.sh"
+bash "scripts/noweather/length_prediction/10min/dlinear_all_features_test.sh"
+bash "scripts/noweather/length_prediction/5min/dlinear_all_features_test.sh"
+bash "scripts/noweather/length_prediction/1min/dlinear_all_features_test.sh"
 
 # 1分钟PatchMLP全部特征随机时间token热身训练与测试
-bash "scripts/noweather/length_prediction/1min/9.15 patchmlp_all_tokenmask_dbloss_train.sh"
-bash "scripts/noweather/length_prediction/1min/9.15 patchmlp_all_tokenmask_dbloss_test.sh"
+bash "scripts/noweather/length_prediction/1min/patchmlp_all_tokenmask_dbloss_train.sh"
+bash "scripts/noweather/length_prediction/1min/patchmlp_all_tokenmask_dbloss_test.sh"
 
 # 30秒和10秒PatchMLP全部特征随机时间token热身训练
-bash "scripts/noweather/length_prediction/30s/9.15 patchmlp_all_tokenmask_dbloss_train.sh"
-bash "scripts/noweather/length_prediction/10s/9.15 patchmlp_all_tokenmask_dbloss_train.sh"
+bash "scripts/noweather/length_prediction/30s/patchmlp_all_tokenmask_dbloss_train.sh"
+bash "scripts/noweather/length_prediction/10s/patchmlp_all_tokenmask_dbloss_train.sh"
 
 # 30秒和10秒16台风机联合面板MultiTurbine训练
-bash "scripts/multi_turbine/length_prediction/30s/9.15 multi_turbine_mmr_pretrain_train.sh"
-bash "scripts/multi_turbine/length_prediction/10s/9.15 multi_turbine_mmr_pretrain_train.sh"
+bash "scripts/multi_turbine/length_prediction/30s/multi_turbine_mmr_pretrain_train.sh"
+bash "scripts/multi_turbine/length_prediction/10s/multi_turbine_mmr_pretrain_train.sh"
 
 # 16台风机联合面板StockEcho长度预测
-bash "scripts/multi_turbine/length_prediction/15min/9.14 stockecho_multi_turbine_train.sh"
-bash "scripts/multi_turbine/length_prediction/15min/9.14 stockecho_multi_turbine_test.sh"
+bash "scripts/multi_turbine/length_prediction/15min/stockecho_multi_turbine_train.sh"
+bash "scripts/multi_turbine/length_prediction/15min/stockecho_multi_turbine_test.sh"
 
 # 16台风机联合面板MultiTurbine长度预测（DTW先验关闭）
-bash "scripts/multi_turbine/length_prediction/15min/9.14 multi_turbine_train.sh"
-bash "scripts/multi_turbine/length_prediction/15min/9.14 multi_turbine_test.sh"
+bash "scripts/multi_turbine/length_prediction/15min/multi_turbine_train.sh"
+bash "scripts/multi_turbine/length_prediction/15min/multi_turbine_test.sh"
 ```
 
 `generate_data.py` 只运行一次，之后不同粒度脚本共享同一份10秒 processed 数据。
@@ -181,7 +182,7 @@ split 和 selection seed 会选择同一窗口；样本归档同时记录完整1
 env -u LD_LIBRARY_PATH uv run python run_single.py \
   --mode train --model DLinearAllFeatures --scenario NoFutureWeather --loss MSE \
   --point-interval-seconds 900 --history-steps 4 --horizon-steps 1 \
-  --epochs 100 --patience 10 --batch-size 1024 --learning-rate 0.001 \
+  --epochs 20 --patience 3 --batch-size 1024 --learning-rate 0.001 \
   --seed 2026 --num-workers 4 --dataset-name GuangningWindPower15min \
   --result-name dlinear_all_features_h4_p1_s1_seed2026 \
   --visualization-split test --visualization-seed 20260913 \
@@ -216,8 +217,8 @@ patch embedding保留，没有引入PatchTST或新建patch切分。
 | `--pretrain-learning-rate` | 0.001 | 热身学习率 |
 | `--pretrain-lr-scheduler` | cosine_hard_restarts | 热身学习率调度器 |
 | `--mae-mask-ratio` | 0.3 | 随机时间token遮蔽比例，数量向上取整 |
-| `--pretrain-patience` | 10 | 验证重建MSE早停耐心值 |
-| `--print-freq` | 1 | 预训练常规epoch摘要打印间隔 |
+| `--pretrain-patience` | 3 | 验证重建MSE早停耐心值 |
+| `--print-freq` | 0 | 常规epoch摘要打印间隔；0=按epoch耗时自动，正数=固定间隔 |
 
 调用时保证至少有一个缺失token和一个可见token，即 `1 <= ceil(L × mask_ratio) < L`。
 例如4点历史、比例0.3时实际遮住2点；16点历史时遮住5点。
@@ -231,12 +232,12 @@ env -u LD_LIBRARY_PATH uv run python run_single.py \
   --point-interval-seconds 900 --history-steps 16 --horizon-steps 1 --window-stride-steps 1 \
   --pretrain --pretrain-epochs 20 --mae-mask-ratio 0.3 \
   --pretrain-learning-rate 0.001 --pretrain-lr-scheduler cosine_hard_restarts \
-  --pretrain-patience 10 --epochs 100 --patience 10 --batch-size 32 --learning-rate 0.001 \
+  --pretrain-patience 3 --epochs 20 --patience 3 --batch-size 32 --learning-rate 0.001 \
   --seed 2026 --num-workers 4 --dataset-name GuangningWindPower15min \
   --result-name patchmlp_tokenmask_m0p4_e20_h16_p1_s1_seed2026
 ```
 
-重定向日志或后台运行时显式增加 `--show-progress 0`。
+重定向日志或后台运行时显式增加 `--tqdm 0`。
 热身保存 `checkpoints/{dataset}/{result_name}/round_1_pretrain.pt`，包含可复查的重建头和
 共享编码器；最终功率模型保存为同目录 `round_1.pt`。运行目录保存
 `pretrain_history.json`、`pretrain_summary.json`，最终records的round中保存实际热身选模与checkpoint路径。

@@ -19,7 +19,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ANALYSIS_ROOT = Path(__file__).resolve().parent
 DATA_ROOT = PROJECT_ROOT / "dataset" / "processed"
 COLUMNS_PATH = DATA_ROOT / "columns.json"
-FIGURE_PATH = ANALYSIS_ROOT / "16台风机功率周期性分析.png"
 PDF_PATH = ANALYSIS_ROOT / "16台风机功率周期性分析.pdf"
 METRICS_PATH = ANALYSIS_ROOT / "16台风机功率周期性指标.csv"
 FONT_PATH = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
@@ -201,7 +200,6 @@ def main():
     end_time = metrics_frame["结束时间"].iloc[0].strftime("%Y-%m-%d %H:%M:%S")
     figure.suptitle(f"16 台风机功率周期性评估（每台全量 {sample_count:,} 个10秒样本）\n" f"{start_time} 至 {end_time}", fontproperties=title_font, y=0.995,)
     figure.tight_layout(rect=(0, 0, 1, 0.96))
-    figure.savefig(FIGURE_PATH, dpi=300, bbox_inches="tight", facecolor="white")
     figure.savefig(PDF_PATH, bbox_inches="tight", facecolor="white")
     plt.close(figure)
 
@@ -210,7 +208,6 @@ def main():
     print("24小时自相关: " f"{metrics_frame['24小时自相关'].min():.4f}–" f"{metrics_frame['24小时自相关'].max():.4f}")
     print("7天自相关: " f"{metrics_frame['7天自相关'].min():.4f}–" f"{metrics_frame['7天自相关'].max():.4f}")
     print(f"指标表: {METRICS_PATH.relative_to(PROJECT_ROOT)}")
-    print(f"分析图: {FIGURE_PATH.relative_to(PROJECT_ROOT)}")
     print(f"PDF: {PDF_PATH.relative_to(PROJECT_ROOT)}")
 
 

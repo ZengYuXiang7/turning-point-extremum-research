@@ -67,7 +67,7 @@ def add_satra_config(args, model_config) -> None:
             model_config["satra_prior"] = "disabled"
 
 
-def write_power_result_contract(args, repository, datasets, checkpoint, best_epoch, best_mse, history, curve_overall, pretraining,):
+def write_power_result_contract(args, repository, datasets, checkpoint, best_epoch, best_mse, best_acc30, history, curve_overall, pretraining,):
     # 写入多风机联合面板的正式 report 与 record。
     test_metrics = {
         "Acc30": curve_overall["strict_acc30"],
@@ -79,7 +79,7 @@ def write_power_result_contract(args, repository, datasets, checkpoint, best_epo
     round_record = {
         "seed": args.seed,
         "best_epoch": best_epoch,
-        "best_valid": {"MSE_scaled": best_mse},
+        "best_valid": {"Acc30": best_acc30, "MSE_scaled": best_mse},
         "test_metrics": test_metrics,
         "checkpoint": checkpoint.as_posix(),
         "early_stop": {
@@ -111,6 +111,12 @@ def write_power_result_contract(args, repository, datasets, checkpoint, best_epo
     relation = metadata[3]
     relation_mix = metadata[4]
     purpose = metadata[5]
+    revin = False
+    feature_normalization = repository.normalization_description
+    if args.model == "MultiTurbine":
+        revin = bool(args.revin)
+        if revin:
+            feature_normalization = f"{feature_normalization}_then_window_revin"
     model_config = {
         "input_features": len(repository.feature_names),
         "feature_fusion": feature_fusion,
@@ -119,7 +125,7 @@ def write_power_result_contract(args, repository, datasets, checkpoint, best_epo
         "turbine_embedding": turbine_embedding,
         "turbine_embedding_relation": relation,
         "embedding_relation_mix_initial": relation_mix,
-        "revin": False,
+        "revin": revin,
     }
     add_satra_config(args, model_config)
     train_config = {
@@ -131,7 +137,7 @@ def write_power_result_contract(args, repository, datasets, checkpoint, best_epo
         "num_workers": args.num_workers,
         "loss": args.loss,
         "dbloss_weight": args.dbloss_weight,
-        "selection_metric": "validation_mse_scaled",
+        "selection_metric": "validation_strict_acc30",
     }
     if args.pretrain:
         purpose = "遮蔽风机时间token重建热身后的SATRA PSTR-Net功率预测"
@@ -157,9 +163,9 @@ def write_power_result_contract(args, repository, datasets, checkpoint, best_epo
         "valid_samples": len(datasets["val"]),
         "test_samples": len(datasets["test"]),
         "features": ", ".join(repository.feature_names),
-        "feature_normalization": "per_turbine_train_standard_scaler",
+        "feature_normalization": feature_normalization,
         "target": "风机-P",
-        "target_transform": "per_turbine_train_standard_scaler",
+        "target_transform": repository.target_transform_description,
     }
     result = {
         "contract_version": CONTRACT_VERSION,

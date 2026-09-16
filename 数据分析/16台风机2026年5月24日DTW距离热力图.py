@@ -19,7 +19,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ANALYSIS_ROOT = Path(__file__).resolve().parent
 PROCESSED_ROOT = PROJECT_ROOT / "dataset" / "processed"
 COLUMNS_PATH = PROCESSED_ROOT / "columns.json"
-FIGURE_PATH = ANALYSIS_ROOT / "16台风机2026年5月24日DTW距离热力图.png"
 PDF_PATH = ANALYSIS_ROOT / "16台风机2026年5月24日DTW距离热力图.pdf"
 DISTANCE_PATH = ANALYSIS_ROOT / "16台风机2026年5月24日DTW距离矩阵.csv"
 PAIR_PATH = ANALYSIS_ROOT / "16台风机2026年5月24日DTW风机对排名.csv"
@@ -99,7 +98,6 @@ def main():
         tick_label.set_fontproperties(note_font)
 
     figure.tight_layout()
-    figure.savefig(FIGURE_PATH, dpi=360, bbox_inches="tight", facecolor="white")
     figure.savefig(PDF_PATH, bbox_inches="tight", facecolor="white")
     plt.close(figure)
 
@@ -111,7 +109,6 @@ def main():
     print(pair_frame.head(5).to_string(index=False))
     print(f"距离矩阵: {DISTANCE_PATH.relative_to(PROJECT_ROOT)}")
     print(f"风机对排名: {PAIR_PATH.relative_to(PROJECT_ROOT)}")
-    print(f"热力图: {FIGURE_PATH.relative_to(PROJECT_ROOT)}")
     print(f"PDF: {PDF_PATH.relative_to(PROJECT_ROOT)}")
 
 

@@ -9,6 +9,7 @@ def select_backbone(args, repository):
     # Single 任务按场景和模型名显式选择骨干。
     weather_task = args.scenario == "ForecastWeather"
     predicted_weather = args.scenario == "PredictedFutureWeather"
+    provided_weather = args.scenario == "ProvidedFutureWeather"
     oracle = args.scenario == "OracleFutureWeather"
     qwen_mlp = args.model == "QwenMLP"
     timer_weather_mlp = args.model == "TimerWeatherMLP"
@@ -21,7 +22,9 @@ def select_backbone(args, repository):
 
             backbone = TimerWeatherMLP(horizon=args.horizon_steps, pretrained_path=args.timer_path, patch_length=args.timer_patch_length, bottleneck=args.timer_bottleneck, unfreeze_layers=args.timer_unfreeze_layers, gradient_checkpointing=bool(args.timer_gradient_checkpointing), residual_forecast=bool(args.timer_residual_forecast),)
         else:
-            backbone = FutureWeatherModel(args.model, args.horizon_steps)
+            backbone = FutureWeatherModel(args.model, args.horizon_steps, len(repository.feature_names), repository.power_index, len(repository.future_feature_names), len(repository.series),)
+    elif provided_weather:
+        backbone = FutureWeatherModel(args.model, args.horizon_steps, len(repository.feature_names), repository.power_index, len(repository.future_feature_names), len(repository.series),)
     elif qwen_mlp:
         from models.single_impl.qwen import QwenMLP
 
@@ -35,7 +38,7 @@ def select_backbone(args, repository):
     elif args.scenario == "NoFutureWeather":
         backbone = NoFutureWeatherModel(args.model, args.horizon_steps, len(repository.feature_names), repository.power_index,)
     else:
-        backbone = FutureWeatherModel(args.model, args.horizon_steps)
+        backbone = FutureWeatherModel(args.model, args.horizon_steps, len(repository.feature_names), repository.power_index, len(repository.future_feature_names), len(repository.series),)
     return backbone
 
 

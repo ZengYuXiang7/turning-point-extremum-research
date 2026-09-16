@@ -10,10 +10,12 @@ from torch.utils.data import DataLoader
 
 import config as project_config
 from config import (
+    BASE_INTERVAL_SECONDS,
     CORRELATED_HISTORY_COLUMNS,
     DATASET_ROOT,
     HISTORY_COLUMNS,
     SPLIT_RATIOS,
+    WEATHER_COLUMNS,
 )
 from data_provider.window_builder import (
     build_multi_turbine_windows,
@@ -31,7 +33,7 @@ class TurbineSeries:
 
 
 class Repository:
-    def __init__(self, root: Path = DATASET_ROOT, all_features: bool = False, correlated_features: bool = False,) -> None:
+    def __init__(self, root: Path = DATASET_ROOT, all_features: bool = False, correlated_features: bool = False, shared_feature_scaling: bool = False,) -> None:
         self.root = Path(root)
         reference_data = np.load(self.root / "turbine_01.npy", mmap_mode="r")
         reference_times = reference_data[:, 0].astype(np.int64) * 1_000_000_000
@@ -40,7 +42,8 @@ class Repository:
         valid_count = len(reference_times) * sum(SPLIT_RATIOS[:2]) // split_ratio_total
         self.train_end = int(reference_times[train_count])
         self.valid_end = int(reference_times[valid_count])
-        raw_series = []
+        raw_values = []
+        series_times = []
         columns_path = self.root / "columns.json"
         source_columns = json.loads(columns_path.read_text(encoding="utf-8"))
 
@@ -59,7 +62,18 @@ class Repository:
             feature_names = HISTORY_COLUMNS
 
         self.feature_names = feature_names
+        self.future_feature_names = WEATHER_COLUMNS
         self.power_index = feature_names.index("风机-P")
+        self.base_interval_seconds = BASE_INTERVAL_SECONDS
+        self.source_description = "dataset/processed/turbine_01.npy ... turbine_16.npy"
+        self.split_description = "chronological_70_10_20"
+        self.normalization_description = "per_turbine_train_standard_scaler_then_window_revin"
+        self.target_name = "风机-P"
+        self.target_transform_description = "per_turbine_train_standard_scaler"
+        self.entity_name = "turbine"
+        if shared_feature_scaling:
+            self.normalization_description = "all_turbines_train_standard_scaler"
+            self.target_transform_description = "all_turbines_train_standard_scaler"
         theory_index = source_columns.index("风机-理论功率-计算")
         real_wind_speed_index = source_columns.index("风机-实时风速")
         real_wind_direction_index = source_columns.index("风机-实时风向")
@@ -110,23 +124,46 @@ class Repository:
                 raw[:, 17] = np.cos(twist_angle)
                 raw[:, -1] = source[:, -1]
 
-            train_mask = times < self.train_end
-            train_features = raw[train_mask]
-            if all_features or correlated_features:
-                scaler = StandardScaler()
-                scaler.fit(train_features)
+            raw_values.append(raw)
+            series_times.append(times)
+
+        # 联合面板仅以全部风机的训练段数据拟合每个特征的一套统计量。
+        if shared_feature_scaling:
+            joint_train_values = []
+            for turbine_index in range(len(raw_values)):
+                times = series_times[turbine_index]
+                train_mask = times < self.train_end
+                joint_train_values.append(raw_values[turbine_index][train_mask])
+            joint_train_features = np.concatenate(joint_train_values, axis=0)
+            scaler = StandardScaler()
+            scaler.fit(joint_train_features)
+            shared_feature_means = scaler.mean_
+            shared_feature_stds = scaler.scale_
+
+        raw_series = []
+        for turbine_index in range(len(raw_values)):
+            times = series_times[turbine_index]
+            raw = raw_values[turbine_index]
+            if shared_feature_scaling:
                 scaled = scaler.transform(raw).astype(np.float32)
-                feature_means = scaler.mean_
-                feature_stds = scaler.scale_
+                feature_means = shared_feature_means
+                feature_stds = shared_feature_stds
             else:
-                feature_means = np.mean(train_features, axis=0, dtype=np.float64)
-                feature_stds = np.std(train_features, axis=0, dtype=np.float64)
-                scaled = ((raw - feature_means) / feature_stds).astype(np.float32)
+                train_mask = times < self.train_end
+                train_features = raw[train_mask]
+                if all_features or correlated_features:
+                    scaler = StandardScaler()
+                    scaler.fit(train_features)
+                    scaled = scaler.transform(raw).astype(np.float32)
+                    feature_means = scaler.mean_
+                    feature_stds = scaler.scale_
+                else:
+                    feature_means = np.mean(train_features, axis=0, dtype=np.float64)
+                    feature_stds = np.std(train_features, axis=0, dtype=np.float64)
+                    scaled = ((raw - feature_means) / feature_stds).astype(np.float32)
             power_mean = float(feature_means[self.power_index])
             power_std = float(feature_stds[self.power_index])
-
             series = TurbineSeries(times=times, raw=raw, scaled=scaled, power_mean=power_mean, power_std=power_std,)
-
             raw_series.append(series)
 
         self.series = raw_series

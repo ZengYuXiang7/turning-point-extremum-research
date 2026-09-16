@@ -18,7 +18,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ANALYSIS_ROOT = Path(__file__).resolve().parent
 DATA_PATH = PROJECT_ROOT / "dataset" / "processed" / "turbine_01.npy"
 COLUMNS_PATH = PROJECT_ROOT / "dataset" / "processed" / "columns.json"
-FIGURE_PATH = ANALYSIS_ROOT / "风机1功率分布.png"
 PDF_PATH = ANALYSIS_ROOT / "风机1功率分布.pdf"
 STATISTICS_PATH = ANALYSIS_ROOT / "风机1功率分布统计.csv"
 FONT_PATH = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
@@ -126,7 +125,6 @@ def main():
     end_time = timestamps[-1].strftime("%Y-%m-%d %H:%M:%S")
     figure.suptitle(f"风机 1 功率数据分布（全量 {len(power_values):,} 个样本）\n" f"{start_time} 至 {end_time}", fontproperties=title_font, y=1.02,)
     figure.tight_layout()
-    figure.savefig(FIGURE_PATH, dpi=300, bbox_inches="tight", facecolor="white")
     figure.savefig(PDF_PATH, bbox_inches="tight", facecolor="white")
     plt.close(figure)
 
@@ -135,7 +133,6 @@ def main():
     print(f"均值: {np.mean(power_values):.2f} kW")
     print(f"中位数: {percentiles[3]:.2f} kW")
     print(f"零功率比例: {zero_count * 100 / len(power_values):.2f}%")
-    print(f"分布图: {FIGURE_PATH.relative_to(PROJECT_ROOT)}")
     print(f"PDF: {PDF_PATH.relative_to(PROJECT_ROOT)}")
     print(f"统计表: {STATISTICS_PATH.relative_to(PROJECT_ROOT)}")
 

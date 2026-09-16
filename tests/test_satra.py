@@ -1,11 +1,13 @@
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import torch
 
-from tasks.multi_turbine.relation_prior import build_wind_dtw_relation
-from models.multi_turbine_impl.multi_turbine import MultiTurbineBackbone
+from models.multi_turbine_impl.multi_turbine import MultiTurbineBackbone, MultiTurbineRevIN
+from tasks.multi_turbine.configuration import parse_args
 from tasks.multi_turbine.pretrain import MaskedMarketReconstruction
+from tasks.multi_turbine.relation_prior import build_wind_dtw_relation
 
 
 def make_relation(turbine_count: int) -> torch.Tensor:
@@ -17,9 +19,30 @@ def make_relation(turbine_count: int) -> torch.Tensor:
 
 
 class TestMultiTurbine(unittest.TestCase):
-    def make_model(self, channels: int = 5, horizon: int = 3, use_dtw_prior: bool = False,) -> MultiTurbineBackbone:
-        model = MultiTurbineBackbone(channels=channels, history_steps=8, horizon=horizon, relation_weight=make_relation(4), use_dtw_prior=use_dtw_prior, hidden_dim=16, depth=1, heads=4, dropout=0.0,)
+    def make_model(self, channels: int = 5, horizon: int = 3, use_revin: bool = True, use_dtw_prior: bool = False,) -> MultiTurbineBackbone:
+        model = MultiTurbineBackbone(channels=channels, power_index=channels - 1, history_steps=8, horizon=horizon, use_revin=use_revin, relation_weight=make_relation(4), use_dtw_prior=use_dtw_prior, hidden_dim=16, depth=1, heads=4, dropout=0.0,)
         return model
+
+    def test_revin_restores_each_turbine_power_independently(self):
+        revin = MultiTurbineRevIN(channels=3)
+        past = torch.tensor([[[[1.0, 10.0, 100.0], [3.0, 20.0, 200.0]], [[5.0, 30.0, 1000.0], [9.0, 60.0, 2000.0]]]])
+
+        normalized, instance_mean, instance_std = revin.normalize(past)
+        restored_power = revin.denormalize_power(normalized[..., 2], instance_mean, instance_std, power_index=2,)
+
+        torch.testing.assert_close(restored_power, past[..., 2])
+
+    def test_revin_argument_controls_multi_turbine_backbone(self):
+        command = ["run_multi.py", "--model", "MultiTurbine", "--scenario", "MultiTurbine", "--loss", "MSE"]
+        with patch("sys.argv", command):
+            enabled_args = parse_args()
+        with patch("sys.argv", command + ["--revin", "0"]):
+            disabled_args = parse_args()
+
+        self.assertEqual(enabled_args.revin, 1)
+        self.assertEqual(disabled_args.revin, 0)
+        self.assertTrue(self.make_model(use_revin=True).use_revin)
+        self.assertFalse(self.make_model(use_revin=False).use_revin)
 
     def test_multi_turbine_forecasts_the_joint_panel(self):
         model = self.make_model()

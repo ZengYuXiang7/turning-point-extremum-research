@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import os
+import sys
 from typing import Any
 
 
@@ -31,3 +33,46 @@ class LineStatusFormatter:
     def format_round(self, *, round_index: int, seed: int, best_epoch: Any, best_valid: Any, test_metrics: dict[str, Any]) -> str:
         metrics = " ".join(f"{name}={_value(value)}" for name, value in test_metrics.items())
         return (f"ROUND round={round_index} seed={seed} best_ep={_value(best_epoch)} " f"best_valid={_value(best_valid)} {metrics}").rstrip()
+
+
+def dynamic_tqdm_enabled(tqdm):
+    # 仅前台终端允许动态刷新，后台进程使用普通日志。
+    if tqdm == 0:
+        return False
+    stream_fd = sys.stderr.fileno()
+    if not os.isatty(stream_fd):
+        return False
+    return os.tcgetpgrp(stream_fd) == os.getpgrp()
+
+
+class EpochProgressPolicy:
+    """首个正常 epoch 用代表性耗时确定进度条与文本日志节奏。"""
+
+    SLOW_SECONDS = 5.0
+
+    def __init__(self, tqdm_enabled, total_epochs):
+        self.tqdm_enabled = tqdm_enabled
+        self.total_epochs = total_epochs
+        self.show_bar = tqdm_enabled
+        self.interval = None
+
+    def show_progress(self):
+        # 前台首轮默认显示，首轮结束后按耗时固定后续状态。
+        return self.show_bar
+
+    def observe(self, seconds):
+        # 首个正常 epoch 后固定进度条与日志间隔，后续不再变化
+        if self.interval is not None:
+            return
+        self.show_bar = self.tqdm_enabled and seconds > self.SLOW_SECONDS
+        if seconds > self.SLOW_SECONDS:
+            self.interval = 1
+        elif self.total_epochs < 1000:
+            self.interval = 10
+        else:
+            self.interval = 100
+
+    def should_log(self, epoch, extra=False):
+        if epoch == 1 or epoch == self.total_epochs or extra:
+            return True
+        return epoch % self.interval == 0

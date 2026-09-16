@@ -27,8 +27,8 @@ def stack_multi_turbine_panel(repository: Repository) -> np.ndarray:
 class MultiTurbineRelationRepository(Repository):
     """同步十六台风机的联合时间面板。"""
 
-    def __init__(self, pstr_relation_top_k: int = 0, pstr_relation_candidate_k: int = 0, pstr_relation_downsample: int = 0, pstr_relation_band: int = 0,) -> None:
-        super().__init__()
+    def __init__(self, all_features: bool = False, pstr_relation_top_k: int = 0, pstr_relation_candidate_k: int = 0, pstr_relation_downsample: int = 0, pstr_relation_band: int = 0,) -> None:
+        super().__init__(all_features=all_features, shared_feature_scaling=True)
         self.panel = stack_multi_turbine_panel(self)
         self.times = self.series[0].times
 
@@ -108,8 +108,8 @@ class MultiTurbineOracleFutureWeatherDataset(Dataset):
         )
 
 
-def make_multi_turbine_no_future_weather_loaders(horizon: int, batch_size: int, num_workers: int, pstr_relation_top_k: int = 0, pstr_relation_candidate_k: int = 0, pstr_relation_downsample: int = 0, pstr_relation_band: int = 0,):
-    repository = MultiTurbineRelationRepository(pstr_relation_top_k, pstr_relation_candidate_k, pstr_relation_downsample, pstr_relation_band,)
+def make_multi_turbine_no_future_weather_loaders(horizon: int, batch_size: int, num_workers: int, all_features: bool = False, pstr_relation_top_k: int = 0, pstr_relation_candidate_k: int = 0, pstr_relation_downsample: int = 0, pstr_relation_band: int = 0,):
+    repository = MultiTurbineRelationRepository(all_features, pstr_relation_top_k, pstr_relation_candidate_k, pstr_relation_downsample, pstr_relation_band,)
     train_dataset = MultiTurbineNoFutureWeatherDataset(repository, "train", horizon)
     val_dataset = MultiTurbineNoFutureWeatherDataset(repository, "val", horizon)
     test_dataset = MultiTurbineNoFutureWeatherDataset(repository, "test", horizon)

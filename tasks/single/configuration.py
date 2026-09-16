@@ -10,10 +10,11 @@ from config import (
 def add_task_arguments(parser: argparse.ArgumentParser) -> None:
     # Single 程序只声明单风机与天气模型。
     parser.add_argument("--model", choices=("PatchMLP", "PatchMLPAllFeatures", "DLinear", "DLinearAllFeatures", "DLinearCorrelatedFeatures", "QwenMLP", "TimerWeatherMLP",), required=True,)
-    parser.add_argument("--scenario", choices=("NoFutureWeather", "OracleFutureWeather", "ForecastWeather", "PredictedFutureWeather",), required=True,)
+    parser.add_argument("--scenario", choices=("NoFutureWeather", "OracleFutureWeather", "ForecastWeather", "PredictedFutureWeather", "ProvidedFutureWeather",), required=True,)
     parser.add_argument("--dataset-name", type=str, default="GuangningWindPower15min")
     parser.add_argument("--history-feature-path", type=str, default="")
     parser.add_argument("--weather-forecast-dir", type=str, default="")
+    parser.add_argument("--provided-weather-dir", type=str, default="")
     parser.add_argument("--llm-path", type=str, default="")
     parser.add_argument("--llm-patch-length", type=int, default=4)
     parser.add_argument("--llm-patch-stride", type=int, default=2)

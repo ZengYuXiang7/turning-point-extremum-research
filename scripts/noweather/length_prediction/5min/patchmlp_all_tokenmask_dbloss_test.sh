@@ -1,0 +1,23 @@
+#!/bin/bash
+set -e
+
+# NoFutureWeather 下 PatchMLPAllFeatures 的随机时间 token 热身与 DBLoss 长度预测；5min一个模型点。
+ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
+cd "$ROOT"
+export PYTHONUNBUFFERED=1
+export CUDA_VISIBLE_DEVICES=0
+unset LD_LIBRARY_PATH
+
+POINT_INTERVAL_SECONDS=300
+DATASET_NAME=GuangningWindPower5min
+RUN_ROOT=".runs/WeatherComparison/NoFutureWeather/PatchMLPAllFeatures/DBLoss/$DATASET_NAME/pretrain_e10_m0p3"
+
+# 仅评估对应正式 record 指向的验证最优检查点。
+uv run python run_single.py --mode test --model PatchMLPAllFeatures --scenario NoFutureWeather --loss DBLoss --dbloss-weight 0.5 --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 12 --horizon-steps 3 --seed 2026 --batch-size 32 --num-workers 4 --tqdm 0 --run-dir "$RUN_ROOT/h12_p3_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name patchmlp_all_tokenmask_e10_m0p3_dbloss_5min_h12_p3_s1_seed2026
+uv run python run_single.py --mode test --model PatchMLPAllFeatures --scenario NoFutureWeather --loss DBLoss --dbloss-weight 0.5 --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 12 --horizon-steps 6 --seed 2026 --batch-size 32 --num-workers 4 --tqdm 0 --run-dir "$RUN_ROOT/h12_p6_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name patchmlp_all_tokenmask_e10_m0p3_dbloss_5min_h12_p6_s1_seed2026
+uv run python run_single.py --mode test --model PatchMLPAllFeatures --scenario NoFutureWeather --loss DBLoss --dbloss-weight 0.5 --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 12 --horizon-steps 12 --seed 2026 --batch-size 32 --num-workers 4 --tqdm 0 --run-dir "$RUN_ROOT/h12_p12_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name patchmlp_all_tokenmask_e10_m0p3_dbloss_5min_h12_p12_s1_seed2026
+uv run python run_single.py --mode test --model PatchMLPAllFeatures --scenario NoFutureWeather --loss DBLoss --dbloss-weight 0.5 --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 24 --horizon-steps 24 --seed 2026 --batch-size 32 --num-workers 4 --tqdm 0 --run-dir "$RUN_ROOT/h24_p24_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name patchmlp_all_tokenmask_e10_m0p3_dbloss_5min_h24_p24_s1_seed2026
+uv run python run_single.py --mode test --model PatchMLPAllFeatures --scenario NoFutureWeather --loss DBLoss --dbloss-weight 0.5 --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 48 --horizon-steps 48 --seed 2026 --batch-size 32 --num-workers 4 --tqdm 0 --run-dir "$RUN_ROOT/h48_p48_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name patchmlp_all_tokenmask_e10_m0p3_dbloss_5min_h48_p48_s1_seed2026
+uv run python run_single.py --mode test --model PatchMLPAllFeatures --scenario NoFutureWeather --loss DBLoss --dbloss-weight 0.5 --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 96 --horizon-steps 96 --seed 2026 --batch-size 32 --num-workers 4 --tqdm 0 --run-dir "$RUN_ROOT/h96_p96_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name patchmlp_all_tokenmask_e10_m0p3_dbloss_5min_h96_p96_s1_seed2026
+uv run python run_single.py --mode test --model PatchMLPAllFeatures --scenario NoFutureWeather --loss DBLoss --dbloss-weight 0.5 --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 144 --horizon-steps 144 --seed 2026 --batch-size 32 --num-workers 4 --tqdm 0 --run-dir "$RUN_ROOT/h144_p144_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name patchmlp_all_tokenmask_e10_m0p3_dbloss_5min_h144_p144_s1_seed2026
+uv run python run_single.py --mode test --model PatchMLPAllFeatures --scenario NoFutureWeather --loss DBLoss --dbloss-weight 0.5 --point-interval-seconds "$POINT_INTERVAL_SECONDS" --window-stride-steps 1 --history-steps 288 --horizon-steps 288 --seed 2026 --batch-size 32 --num-workers 4 --tqdm 0 --run-dir "$RUN_ROOT/h288_p288_s1_seed2026" --dataset-name "$DATASET_NAME" --result-name patchmlp_all_tokenmask_e10_m0p3_dbloss_5min_h288_p288_s1_seed2026

@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 import config as project_config
 from config import BASE_INTERVAL_SECONDS, PROJECT_ROOT
+from observability.exp_progress import dynamic_tqdm_enabled
 
 
 def dump_weather_forecasts(model, datasets, batch_size, num_workers, device, run_dir, show_progress,):
@@ -18,7 +19,7 @@ def dump_weather_forecasts(model, datasets, batch_size, num_workers, device, run
         weather_chunks = []
         turbine_chunks = []
         start_chunks = []
-        batches = tqdm(loader, total=len(loader), desc=f"dump weather {split}", disable=show_progress == 0, leave=False,)
+        batches = tqdm(loader, total=len(loader), desc=f"dump weather {split}", disable=not show_progress, leave=False,)
         with torch.no_grad():
             for past, weather, target, turbine_id, target_start in batches:
                 past = past.to(device, non_blocking=True)
@@ -44,7 +45,7 @@ def dump_weather_forecasts(model, datasets, batch_size, num_workers, device, run
 def evaluate_weather(args, model, datasets, device, checkpoint, best_epoch, best_mse):
     # 天气程序生成预测文件并汇总测试尺度误差。
     run_dir = Path(args.run_dir)
-    dump_weather_forecasts(model, datasets, args.batch_size, args.num_workers, device, run_dir, args.show_progress,)
+    dump_weather_forecasts(model, datasets, args.batch_size, args.num_workers, device, run_dir, dynamic_tqdm_enabled(args.tqdm),)
     test_loader = DataLoader(datasets["test"], batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True, drop_last=False,)
     test_mse_total = 0.0
     test_points = 0

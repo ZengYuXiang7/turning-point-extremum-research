@@ -9,7 +9,7 @@ from models.single_impl.future_weather_model import FutureWeatherModel
 class TestFutureWeatherModel(unittest.TestCase):
     def test_dlinear_future_weather_forward(self):
         horizon = 3
-        model = FutureWeatherModel("DLinear", horizon=horizon)
+        model = FutureWeatherModel("DLinear", horizon=horizon, history_channels=len(HISTORY_COLUMNS), power_index=HISTORY_COLUMNS.index("风机-P"), future_channels=len(WEATHER_COLUMNS), entity_count=16,)
         past = torch.randn(2, HISTORY_STEPS, len(HISTORY_COLUMNS))
         future_weather = torch.randn(2, horizon, len(WEATHER_COLUMNS))
         turbine_id = torch.tensor([0, 1], dtype=torch.long)

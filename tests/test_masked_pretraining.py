@@ -42,8 +42,8 @@ class TestMaskedPretraining(unittest.TestCase):
 
         self.assertFalse(direct_args.pretrain)
         self.assertTrue(pretrain_args.pretrain)
-        self.assertEqual(direct_args.pretrain_epochs, 20)
-        self.assertEqual(pretrain_args.pretrain_epochs, 20)
+        self.assertEqual(direct_args.pretrain_epochs, 10)
+        self.assertEqual(pretrain_args.pretrain_epochs, 10)
         self.assertEqual(pretrain_args.mae_mask_ratio, 0.3)
         self.assertEqual(pretrain_args.pretrain_lr_scheduler, "cosine_hard_restarts",)
 
@@ -94,7 +94,7 @@ class TestMaskedPretraining(unittest.TestCase):
         repository = SimpleNamespace(train_end=10, series=[SimpleNamespace(times=[0, 10, 20, 30])],)
         datasets = {"train": train_dataset, "val": validation_dataset}
         loaders = {"train": DataLoader(train_dataset, batch_size=2, shuffle=True)}
-        args = SimpleNamespace(model="PatchMLPAllFeatures", seed=2026, history_steps=HISTORY_STEPS, batch_size=2, num_workers=0, result_name="", dataset_name="Synthetic", pretrain_epochs=2, pretrain_learning_rate=0.001, pretrain_lr_scheduler="cosine_hard_restarts", mae_mask_ratio=0.3, pretrain_patience=2, print_freq=1, show_progress=0,)
+        args = SimpleNamespace(model="PatchMLPAllFeatures", seed=2026, history_steps=HISTORY_STEPS, batch_size=2, num_workers=0, result_name="", dataset_name="Synthetic", pretrain_epochs=2, pretrain_learning_rate=0.001, pretrain_lr_scheduler="cosine_hard_restarts", mae_mask_ratio=0.3, pretrain_patience=2, tqdm=0,)
         backbone = self.model.backbone
         initial_embedding = (
             backbone.patch_embedding.EmbLayer_1.ff[0].weight.detach().clone()

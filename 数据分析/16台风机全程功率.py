@@ -18,7 +18,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ANALYSIS_ROOT = Path(__file__).resolve().parent
 PROCESSED_ROOT = PROJECT_ROOT / "dataset" / "processed"
 COLUMNS_PATH = PROCESSED_ROOT / "columns.json"
-FIGURE_PATH = ANALYSIS_ROOT / "16台风机全程功率.png"
 PDF_PATH = ANALYSIS_ROOT / "16台风机全程功率.pdf"
 FONT_PATH = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
 TURBINE_COUNT = 16
@@ -95,12 +94,10 @@ def main():
     end_date = np.datetime64(int(end_time), "s").astype("datetime64[D]")
     figure.suptitle(f"16台风机全程功率（原始10秒粒度，无降采样/聚合）\n" f"{start_date} 至 {end_date}；每台 {len(power_values):,} 个样本；统一纵轴 {lower_bound:.0f}–{upper_bound:.0f} kW", fontproperties=title_font, y=0.995,)
     figure.tight_layout(rect=(0, 0, 1, 0.95))
-    figure.savefig(FIGURE_PATH, dpi=200, bbox_inches="tight", facecolor="white")
     figure.savefig(PDF_PATH, dpi=200, bbox_inches="tight", facecolor="white")
     plt.close(figure)
 
     # 输出图件路径和数据口径。
-    print(f"图件: {FIGURE_PATH.relative_to(PROJECT_ROOT)}")
     print(f"PDF: {PDF_PATH.relative_to(PROJECT_ROOT)}")
     print(f"时间范围: {start_date} 至 {end_date}")
     print(f"每台样本数: {len(power_values):,}")

@@ -16,6 +16,7 @@ from config import (
     POINT_INTERVAL_SECONDS,
     POINT_STRIDE_STEPS,
     POWER_INDEX,
+    WEATHER_COLUMNS,
 )
 from tasks.single.no_future_dataset import NoFutureWeatherDataset
 from models.multi_turbine_impl.stockecho import StockEchoNoFutureWeather
@@ -29,7 +30,7 @@ from tasks.single.summary import print_data_summary
 class SummaryDataset(Dataset):
     def __init__(self, start_ns: int) -> None:
         self.start_ns = start_ns
-        self.repository = SimpleNamespace(feature_names=HISTORY_COLUMNS)
+        self.repository = SimpleNamespace(feature_names=HISTORY_COLUMNS, future_feature_names=WEATHER_COLUMNS,)
 
     def __len__(self) -> int:
         return 2
@@ -121,7 +122,7 @@ class TestNoFutureWeather(unittest.TestCase):
 
         output = io.StringIO()
         with redirect_stdout(output):
-            print_data_summary(datasets, loaders, horizon_steps=1, window_stride_steps=1, no_future_weather=True, weather_task=False, oracle=False, predicted_weather=False,)
+            print_data_summary(datasets, loaders, horizon_steps=1, window_stride_steps=1, no_future_weather=True, weather_task=False, oracle=False, predicted_weather=False, provided_weather=False,)
 
         text = output.getvalue()
         self.assertIn(f"输入  past shape=[2, {HISTORY_STEPS}, 19]  turbine_id shape=[2]", text,)

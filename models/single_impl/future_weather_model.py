@@ -6,11 +6,8 @@ import torch.nn.functional as F
 
 import config as project_config
 from config import (
-    HISTORY_COLUMNS,
     PATCH_LENGTHS,
-    POWER_INDEX,
     TEMPORAL_POOL_STEPS,
-    WEATHER_COLUMNS,
 )
 from models.single_impl.dlinear import DLinear
 from models.single_impl.embed import Emb
@@ -40,22 +37,23 @@ class VariableSelectionNetwork(nn.Module):
 class FutureWeatherModel(nn.Module):
     """历史序列和未来天气到未来功率。"""
 
-    def __init__(self, model_name: str, horizon: int, hidden: int = 192) -> None:
+    def __init__(self, model_name: str, horizon: int, history_channels: int, power_index: int, future_channels: int, entity_count: int, hidden: int = 192,) -> None:
         # horizon 为当前采样粒度下的步数
         super().__init__()
         self.model_name = model_name.lower()
         self.horizon = int(horizon)
+        self.power_index = int(power_index)
 
         if self.model_name == "patchmlp":
-            config = PatchConfig(seq_len=project_config.HISTORY_STEPS, pred_len=self.horizon,)
+            config = PatchConfig(seq_len=project_config.HISTORY_STEPS, pred_len=self.horizon, enc_in=history_channels,)
             self.backbone = OfficialPatchMLP(config)
             self.backbone.emb = Emb(project_config.HISTORY_STEPS, config.d_model, patch_len=PATCH_LENGTHS,)
         elif self.model_name == "dlinear":
-            self.backbone = DLinear(project_config.HISTORY_STEPS, self.horizon, len(HISTORY_COLUMNS),)
+            self.backbone = DLinear(project_config.HISTORY_STEPS, self.horizon, history_channels,)
 
-        self.past_projection = nn.Linear(len(HISTORY_COLUMNS), hidden)
-        self.future_selection = VariableSelectionNetwork(len(WEATHER_COLUMNS), hidden)
-        self.turbine_embedding = nn.Embedding(16, hidden)
+        self.past_projection = nn.Linear(history_channels, hidden)
+        self.future_selection = VariableSelectionNetwork(future_channels, hidden)
+        self.turbine_embedding = nn.Embedding(entity_count, hidden)
         self.future_decoder = nn.GRU(hidden, hidden, batch_first=True)
         self.initial_state = nn.Sequential(nn.Linear(hidden, hidden), nn.Tanh())
         self.attention = nn.MultiheadAttention(hidden, 4, dropout=0.1, batch_first=True)
@@ -71,7 +69,7 @@ class FutureWeatherModel(nn.Module):
         else:
             forecast = self.backbone(past)
 
-        base_curve = forecast[:, :, POWER_INDEX]
+        base_curve = forecast[:, :, self.power_index]
         return base_curve
 
     def forward(self, past: torch.Tensor, future_weather: torch.Tensor, turbine_id: torch.Tensor,) -> torch.Tensor:

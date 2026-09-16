@@ -18,7 +18,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ANALYSIS_ROOT = Path(__file__).resolve().parent
 DATA_PATH = PROJECT_ROOT / "dataset" / "processed" / "turbine_01.npy"
 COLUMNS_PATH = PROJECT_ROOT / "dataset" / "processed" / "columns.json"
-HEATMAP_PATH = ANALYSIS_ROOT / "风机1特征相关性热力图.png"
 PDF_PATH = ANALYSIS_ROOT / "风机1特征相关性热力图.pdf"
 CORRELATION_PATH = ANALYSIS_ROOT / "风机1特征相关性矩阵.csv"
 FONT_PATH = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
@@ -66,7 +65,6 @@ def main():
     for tick_label in color_bar.ax.get_yticklabels():
         tick_label.set_fontproperties(note_font)
     figure.subplots_adjust(left=0.37, bottom=0.31, right=0.92, top=0.94)
-    figure.savefig(HEATMAP_PATH, dpi=220, bbox_inches="tight", facecolor="white")
     figure.savefig(PDF_PATH, bbox_inches="tight", facecolor="white")
     plt.close(figure)
 
@@ -74,7 +72,6 @@ def main():
     print(f"样本数: {len(feature_frame):,}")
     print(f"特征数: {len(columns)}")
     print(f"零方差特征: {'、'.join(constant_columns)}")
-    print(f"热力图: {HEATMAP_PATH.relative_to(PROJECT_ROOT)}")
     print(f"PDF: {PDF_PATH.relative_to(PROJECT_ROOT)}")
     print(f"相关矩阵: {CORRELATION_PATH.relative_to(PROJECT_ROOT)}")
 

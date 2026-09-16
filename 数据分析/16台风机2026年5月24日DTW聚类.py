@@ -26,9 +26,7 @@ COLUMNS_PATH = PROCESSED_ROOT / "columns.json"
 DISTANCE_PATH = ANALYSIS_ROOT / "16台风机2026年5月24日DTW距离矩阵.csv"
 CLUSTER_PATH = ANALYSIS_ROOT / "16台风机2026年5月24日DTW聚类结果.csv"
 EVALUATION_PATH = ANALYSIS_ROOT / "16台风机2026年5月24日DTW候选簇数评估.csv"
-HEATMAP_PATH = ANALYSIS_ROOT / "16台风机2026年5月24日DTW聚类热力图.png"
 HEATMAP_PDF_PATH = ANALYSIS_ROOT / "16台风机2026年5月24日DTW聚类热力图.pdf"
-CURVES_PATH = ANALYSIS_ROOT / "16台风机2026年5月24日DTW聚类功率曲线.png"
 CURVES_PDF_PATH = ANALYSIS_ROOT / "16台风机2026年5月24日DTW聚类功率曲线.pdf"
 FONT_PATH = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
 TURBINE_COUNT = 16
@@ -134,7 +132,7 @@ def main():
         heatmap_axis.axhline(boundary, color="#202020", linewidth=2.0)
         heatmap_axis.axvline(boundary, color="#202020", linewidth=2.0)
 
-    # 用簇颜色区分坐标标签并导出图片
+    # 用簇颜色区分坐标标签并导出 PDF。
     x_tick_labels = heatmap_axis.get_xticklabels()
     y_tick_labels = heatmap_axis.get_yticklabels()
     for ordered_index in range(TURBINE_COUNT):
@@ -144,7 +142,6 @@ def main():
     color_bar = heatmap_figure.colorbar(heatmap_image, ax=heatmap_axis, fraction=0.046, pad=0.04,)
     color_bar.set_label("长度归一化DTW距离（越小越相似）", fontproperties=axis_font, labelpad=12,)
     heatmap_figure.tight_layout()
-    heatmap_figure.savefig(HEATMAP_PATH, dpi=360, bbox_inches="tight", facecolor="white",)
     heatmap_figure.savefig(HEATMAP_PDF_PATH, bbox_inches="tight", facecolor="white",)
     plt.close(heatmap_figure)
 
@@ -206,7 +203,6 @@ def main():
     # 标注聚类口径并导出分簇曲线图
     curve_figure.suptitle(f"2026年5月24日16台风机DTW聚类功率曲线（{cluster_count}簇）\n" f"同簇内任意两台DTW距离 < {HIGH_SIMILARITY_DISTANCE:.2f}｜" "每台8640个原始10秒点，无降采样", fontproperties=title_font, y=0.995,)
     curve_figure.tight_layout(rect=(0, 0, 1, 0.955))
-    curve_figure.savefig(CURVES_PATH, dpi=300, bbox_inches="tight", facecolor="white",)
     curve_figure.savefig(CURVES_PDF_PATH, dpi=300, bbox_inches="tight", facecolor="white",)
     plt.close(curve_figure)
 
@@ -219,9 +215,7 @@ def main():
         print(f"簇{cluster_id}: {member_text}")
     print(f"聚类结果: {CLUSTER_PATH.relative_to(PROJECT_ROOT)}")
     print(f"候选簇数评估: {EVALUATION_PATH.relative_to(PROJECT_ROOT)}")
-    print(f"聚类热力图: {HEATMAP_PATH.relative_to(PROJECT_ROOT)}")
     print(f"聚类热力图PDF: {HEATMAP_PDF_PATH.relative_to(PROJECT_ROOT)}")
-    print(f"分簇功率曲线: {CURVES_PATH.relative_to(PROJECT_ROOT)}")
     print(f"分簇功率曲线PDF: {CURVES_PDF_PATH.relative_to(PROJECT_ROOT)}")
 
 

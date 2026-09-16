@@ -20,6 +20,11 @@ from tasks.multi_turbine.training_setup import (
 def test_existing_result(args, model, repository, datasets, loaders, device):
     # 多风机测试模式只读取联合面板的正式 record。
     record_path = result_record_path(args.dataset_name, args.result_name)
+    if not record_path.exists():
+        raise FileNotFoundError(
+            f"未找到结果记录 {record_path}："
+            "请先用相同的 --result-name 与 --run-dir 跑完 train，生成 record 后再执行 test。"
+        )
     result = json.loads(record_path.read_text(encoding="utf-8"))
     round_record = result["rounds"][0]
     checkpoint = PROJECT_ROOT / round_record["checkpoint"]
@@ -43,12 +48,10 @@ def train_task(args, repository, datasets, loaders, model, device) -> dict:
         result = test_existing_result(args, model, repository, datasets, loaders, device)
         return result
 
-    objective, optimizer, scheduler, select_acc30, selection_metric = (
-        build_optimization(args, model, device)
-    )
+    objective, optimizer, scheduler, selection_metric = build_optimization(args, model, device)
     power_means, power_stds = build_power_scales(repository, device)
     config = build_training_config(args, model, repository, datasets, pretraining, compile_mode, selection_metric,)
     write_training_config(run_dir, config)
-    (checkpoint, contract_checkpoint, best_epoch, best_mse, best_acc30, history,) = fit_model(args, model, loaders, device, objective, optimizer, scheduler, select_acc30, power_means, power_stds, config, run_dir,)
+    (checkpoint, contract_checkpoint, best_epoch, best_mse, best_acc30, history,) = fit_model(args, model, loaders, device, objective, optimizer, scheduler, power_means, power_stds, config, run_dir,)
     result = test_checkpoint(args, model, repository, datasets, loaders, device, checkpoint, contract_checkpoint, best_epoch, best_mse, best_acc30, history, pretraining,)
     return result

@@ -1,0 +1,97 @@
+{
+  "contract_version": "experiment-contract-v2",
+  "dataset": "GuangningSiteProvidedWeather15min",
+  "result_name": "provided_weather_dlinear_h4_p3_s1_seed2026",
+  "model_name": "DLinear",
+  "purpose": "历史场站数据与甲方未来预测风速的功率预测",
+  "condition": {
+    "domain": "wind_power_forecasting",
+    "scenario": "ProvidedFutureWeather",
+    "base_interval_seconds": 900,
+    "point_interval_seconds": 900,
+    "history_steps": 4,
+    "horizon_steps": 3,
+    "window_stride_steps": 1,
+    "loss": "MSE",
+    "dbloss_weight": 0.5
+  },
+  "model_config": {
+    "input_features": 6,
+    "feature_fusion": "learned_linear_projection",
+    "moving_average_kernel": 25,
+    "temporal_projection": "shared_across_channels",
+    "turbine_embedding": false,
+    "turbine_embedding_relation": "none",
+    "embedding_relation_mix_initial": null,
+    "revin": false
+  },
+  "train_config": {
+    "seed": 2026,
+    "epochs": 10,
+    "patience": 3,
+    "batch_size": 64,
+    "learning_rate": 0.001,
+    "num_workers": 4,
+    "loss": "MSE",
+    "dbloss_weight": 0.5,
+    "selection_metric": "validation_strict_acc30"
+  },
+  "data_config": {
+    "source": "甲方提供新的内容/9月11日/yc*.xlsx",
+    "available_samples": 11780,
+    "split": "chronological_70_10_20",
+    "split_seeds": "none",
+    "train_samples": 8241,
+    "valid_samples": 1179,
+    "test_samples": 2360,
+    "features": "超短期预测功率(kW), 实际功率(kW), 风电理论功率(kW), 实际风速(m/s), 风电可用功率(kW), 风电电网调令(kW)",
+    "feature_normalization": "site_train_standard_scaler",
+    "target": "实际功率(kW)",
+    "target_transform": "site_train_standard_scaler"
+  },
+  "mean_std": {
+    "Acc30": {
+      "mean": 69.54225352112677,
+      "std": 0.0
+    },
+    "MAE": {
+      "mean": 2362.424265647069,
+      "std": 0.0
+    },
+    "MAPE": {
+      "mean": 39.52104847486159,
+      "std": 0.0
+    },
+    "MSE": {
+      "mean": 14828084.96646054,
+      "std": 0.0
+    },
+    "RMSE": {
+      "mean": 3850.725252009099,
+      "std": 0.0
+    }
+  },
+  "significance": [],
+  "rounds": [
+    {
+      "seed": 2026,
+      "best_epoch": 3,
+      "best_valid": {
+        "Acc30": 75.32861476238625,
+        "MSE_scaled": 0.03970229827488462
+      },
+      "test_metrics": {
+        "Acc30": 69.54225352112677,
+        "MAE": 2362.424265647069,
+        "MSE": 14828084.96646054,
+        "RMSE": 3850.725252009099,
+        "MAPE": 39.52104847486159
+      },
+      "checkpoint": "checkpoints/GuangningSiteProvidedWeather15min/provided_weather_dlinear_h4_p3_s1_seed2026/round_1.pt",
+      "early_stop": {
+        "patience": 3,
+        "completed_epochs": 6
+      }
+    }
+  ]
+}
