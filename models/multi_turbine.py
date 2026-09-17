@@ -1,5 +1,6 @@
 from torch import nn
 
+from models.multi_turbine_impl.model2 import Model2Backbone
 from models.multi_turbine_impl.multi_turbine import MultiTurbineBackbone
 from models.multi_turbine_impl.stockecho import StockEchoNoFutureWeather
 
@@ -12,7 +13,12 @@ def select_backbone(args, repository, relation_weight):
         if not use_spatial_relation:
             use_dtw_prior = False
         backbone = MultiTurbineBackbone(channels=len(repository.feature_names), power_index=repository.power_index, history_steps=args.history_steps, horizon=args.horizon_steps, use_revin=bool(args.revin), use_spatial_relation=use_spatial_relation, relation_weight=relation_weight, use_dtw_prior=use_dtw_prior, hidden_dim=args.satra_hidden_dim, depth=args.satra_depth, kernel_size=args.satra_kernel_size, heads=args.satra_heads, tower_layers=args.satra_tower_layers, dropout=args.satra_dropout, expert_top_k=args.satra_expert_top_k,)
-    
+    elif args.model == "Model2":
+        use_spatial_relation = bool(args.satra_use_spatial_relation)
+        use_dtw_prior = bool(args.satra_use_dtw_prior)
+        if not use_spatial_relation:
+            use_dtw_prior = False
+        backbone = Model2Backbone(channels=len(repository.feature_names), power_index=repository.power_index, history_steps=args.history_steps, horizon=args.horizon_steps, use_revin=bool(args.revin), patch_length=args.model2_patch_length, patch_stride=args.model2_patch_stride, use_spatial_relation=use_spatial_relation, relation_weight=relation_weight, use_dtw_prior=use_dtw_prior, hidden_dim=args.satra_hidden_dim, depth=args.satra_depth, kernel_size=args.satra_kernel_size, heads=args.satra_heads, tower_layers=args.satra_tower_layers, dropout=args.satra_dropout, expert_top_k=args.satra_expert_top_k,)
     elif args.model == "StockEcho":
         backbone = StockEchoNoFutureWeather(args.horizon_steps)
     return backbone

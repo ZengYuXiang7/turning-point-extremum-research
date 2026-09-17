@@ -13,7 +13,7 @@ from tasks.multi_turbine.trainer import prepare_task_runtime, train_task
 
 def build_task_components(args, device: torch.device, num_workers: int):
     # MultiTurbine 模型按开关决定是否读取训练段 DTW 关系。
-    if args.model == "MultiTurbine":
+    if args.model in ("MultiTurbine", "Model2"):
         use_dtw_prior = bool(args.satra_use_spatial_relation)
         if use_dtw_prior:
             use_dtw_prior = bool(args.satra_use_dtw_prior)
@@ -54,8 +54,8 @@ def train_and_test(args) -> dict:
     if args.scenario != "MultiTurbine":
         raise ValueError("multi_turbine_task requires scenario MultiTurbine")
 
-    if args.model not in ("StockEcho", "MultiTurbine"):
-        raise ValueError("MultiTurbine task supports StockEcho and MultiTurbine only")
+    if args.model not in ("StockEcho", "MultiTurbine", "Model2"):
+        raise ValueError("MultiTurbine task supports StockEcho, MultiTurbine and Model2 only")
 
     device = prepare_task_runtime(args.seed)
 

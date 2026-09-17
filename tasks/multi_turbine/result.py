@@ -19,13 +19,20 @@ def select_model_metadata(model_name: str):
         relation = "projected_pairwise_cosine_learned_mix"
         relation_mix = 0.20
         purpose = "16台风机联合面板的身份嵌入与动态关系功率预测"
-    else:
+    elif model_name == "MultiTurbine":
         feature_fusion = "state_conditioned_pattern_experts"
         temporal_projection = "residual_temporal_cnn_plus_top3_moe"
         turbine_embedding = False
         relation = "none"
         relation_mix = None
         purpose = "16台风机联合面板的SATRA PSTR-Net功率预测"
+    else:
+        feature_fusion = "per_turbine_overlapping_patch_cnn_moe_then_spatial_fusion"
+        temporal_projection = "patch_overlap_add_then_multi_horizon_projection"
+        turbine_embedding = False
+        relation = "none"
+        relation_mix = None
+        purpose = "16台风机独立分patch并经共享CNN-MoE后合并的联合功率预测"
     return (
         feature_fusion,
         temporal_projection,
@@ -38,7 +45,7 @@ def select_model_metadata(model_name: str):
 
 def add_satra_config(args, model_config) -> None:
     # SATRA 结构开关只在 MultiTurbine 模型记录中出现。
-    if args.model == "MultiTurbine":
+    if args.model in ("MultiTurbine", "Model2"):
         model_config["satra_hidden_dim"] = args.satra_hidden_dim
         model_config["satra_depth"] = args.satra_depth
         model_config["satra_kernel_size"] = args.satra_kernel_size
@@ -65,6 +72,10 @@ def add_satra_config(args, model_config) -> None:
             model_config["satra_prior_band"] = args.satra_prior_band
         else:
             model_config["satra_prior"] = "disabled"
+        if args.model == "Model2":
+            model_config["patch_length"] = args.model2_patch_length
+            model_config["patch_stride"] = args.model2_patch_stride
+            model_config["patch_merge"] = "overlap_add_mean"
 
 
 def write_power_result_contract(args, repository, datasets, checkpoint, best_epoch, best_mse, best_acc30, history, curve_overall, pretraining,):
@@ -113,7 +124,7 @@ def write_power_result_contract(args, repository, datasets, checkpoint, best_epo
     purpose = metadata[5]
     revin = False
     feature_normalization = repository.normalization_description
-    if args.model == "MultiTurbine":
+    if args.model in ("MultiTurbine", "Model2"):
         revin = bool(args.revin)
         if revin:
             feature_normalization = f"{feature_normalization}_then_window_revin"

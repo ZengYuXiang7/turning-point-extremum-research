@@ -26,7 +26,7 @@ def prepare_task_runtime(seed: int) -> torch.device:
 def compile_model(args, model):
     # 稀疏 Top-3 MoE 保持 eager，StockEcho 继续编译。
     logging.getLogger("torch.fx.experimental.symbolic_shapes").setLevel(logging.ERROR)
-    if args.model == "MultiTurbine":
+    if args.model in ("MultiTurbine", "Model2"):
         compile_mode = "disabled_for_multi_turbine_sparse_top3_moe"
     else:
         model = torch.compile(model, mode="reduce-overhead")
@@ -87,7 +87,7 @@ def build_training_config(args, model, repository, datasets, pretraining, compil
     config["feature_names"] = repository.feature_names
     config["input_feature_count"] = len(repository.feature_names)
     feature_normalization = repository.normalization_description
-    if args.model == "MultiTurbine" and args.revin:
+    if args.model in ("MultiTurbine", "Model2") and args.revin:
         feature_normalization = f"{feature_normalization}_then_window_revin"
     config["feature_normalization"] = feature_normalization
     config["target_transform"] = repository.target_transform_description
