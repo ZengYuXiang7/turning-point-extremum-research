@@ -10,6 +10,7 @@ from config import PROJECT_ROOT
 from observability import result_record_path, result_report_path
 from observability.exp_progress import dynamic_tqdm_enabled
 from tasks.single.result import write_power_result_contract
+from utils.amp import autocast_context
 from utils.metrics import metric_bundle, save_metrics
 
 
@@ -31,7 +32,7 @@ def collect_predictions(args, model, loaders, device, model_uses_future_weather)
             turbine_gpu = turbine_id.to(device, non_blocking=True)
             if model_uses_future_weather:
                 future_weather = future_weather.to(device, non_blocking=True)
-            with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == "cuda",):
+            with autocast_context(device):
                 if model_uses_future_weather:
                     prediction = model(past, future_weather, turbine_gpu)
                 else:

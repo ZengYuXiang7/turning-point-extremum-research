@@ -13,6 +13,15 @@ def select_backbone(args, repository):
     oracle = args.scenario == "OracleFutureWeather"
     qwen_mlp = args.model == "QwenMLP"
     timer_weather_mlp = args.model == "TimerWeatherMLP"
+    time_moe_arevin = args.model == "TimeMoEARevIN"
+
+    if time_moe_arevin and args.scenario != "NoFutureWeather":
+        raise ValueError("TimeMoEARevIN 目前仅支持 NoFutureWeather 场景")
+    if time_moe_arevin and getattr(args, "pretrain", False):
+        raise ValueError(
+            "TimeMoEARevIN 不使用当前 PatchMLP 专用的掩码重建预训练，"
+            "请移除 --pretrain"
+        )
 
     if weather_task:
         backbone = WeatherForecastModel(args.model, args.horizon_steps)
@@ -35,6 +44,19 @@ def select_backbone(args, repository):
         from models.single_impl.timer import TimerWeatherMLP
 
         backbone = TimerWeatherMLP(horizon=args.horizon_steps, pretrained_path=args.timer_path, patch_length=args.timer_patch_length, bottleneck=args.timer_bottleneck, unfreeze_layers=args.timer_unfreeze_layers, gradient_checkpointing=bool(args.timer_gradient_checkpointing), residual_forecast=bool(args.timer_residual_forecast),)
+    elif time_moe_arevin:
+        from models.single_impl.time_moe_arevin import TimeMoEAdaptiveRevIN
+
+        backbone = TimeMoEAdaptiveRevIN(
+            horizon=args.horizon_steps,
+            channels=len(repository.feature_names),
+            power_index=repository.power_index,
+            entity_count=len(repository.series),
+            pretrained_path=args.time_moe_path,
+            bottleneck=args.time_moe_bottleneck,
+            unfreeze_layers=args.time_moe_unfreeze_layers,
+            gradient_checkpointing=bool(args.time_moe_gradient_checkpointing),
+        )
     elif args.scenario == "NoFutureWeather":
         backbone = NoFutureWeatherModel(args.model, args.horizon_steps, len(repository.feature_names), repository.power_index,)
     else:

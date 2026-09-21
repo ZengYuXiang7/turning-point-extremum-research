@@ -11,7 +11,12 @@ from observability import (
 
 def select_model_metadata(model_name: str):
     # Single 模型元数据保持原实验契约含义。
-    if model_name == "PatchMLPAllFeatures":
+    if model_name == "TimeMoEARevIN":
+        feature_fusion = "gated_numeric_embedding"
+        moving_average_kernel = None
+        temporal_projection = "time_moe_last_token"
+        purpose = "TimeMoE与Adaptive RevIN结合的多变量历史功率预测"
+    elif model_name == "PatchMLPAllFeatures":
         feature_fusion = "cross_variable_mlp"
         moving_average_kernel = 13
         temporal_projection = "multi_scale_patch_mlp"

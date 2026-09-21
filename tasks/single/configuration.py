@@ -9,7 +9,7 @@ from config import (
 
 def add_task_arguments(parser: argparse.ArgumentParser) -> None:
     # Single 程序只声明单风机与天气模型。
-    parser.add_argument("--model", choices=("PatchMLP", "PatchMLPAllFeatures", "DLinear", "DLinearAllFeatures", "DLinearCorrelatedFeatures", "QwenMLP", "TimerWeatherMLP",), required=True,)
+    parser.add_argument("--model", choices=("PatchMLP", "PatchMLPAllFeatures", "DLinear", "DLinearAllFeatures", "DLinearCorrelatedFeatures", "QwenMLP", "TimerWeatherMLP", "TimeMoEARevIN",), required=True,)
     parser.add_argument("--scenario", choices=("NoFutureWeather", "OracleFutureWeather", "ForecastWeather", "PredictedFutureWeather", "ProvidedFutureWeather",), required=True,)
     parser.add_argument("--dataset-name", type=str, default="GuangningWindPower15min")
     parser.add_argument("--history-feature-path", type=str, default="")
@@ -27,6 +27,12 @@ def add_task_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--timer-backbone-learning-rate", type=float, default=1e-5)
     parser.add_argument("--timer-gradient-checkpointing", type=int, choices=(0, 1), default=0)
     parser.add_argument("--timer-residual-forecast", type=int, choices=(0, 1), default=1)
+    parser.add_argument("--time-moe-path", type=str, default="")
+    parser.add_argument("--time-moe-bottleneck", type=int, default=512)
+    parser.add_argument("--time-moe-unfreeze-layers", type=int, default=0)
+    parser.add_argument("--time-moe-backbone-learning-rate", type=float, default=1e-5)
+    parser.add_argument("--time-moe-gradient-checkpointing", type=int, choices=(0, 1), default=0)
+    parser.add_argument("--visualize-after-train", type=int, choices=(0, 1), default=1)
 
 
 def parse_args():
