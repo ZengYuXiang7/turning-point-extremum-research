@@ -21,7 +21,11 @@ def main():
     train_and_test(args)
 
     # 训练结束后生成固定随机样本的预测图。
-    if args.mode == "train" and args.scenario != "ProvidedFutureWeather":
+    if (
+        args.mode == "train"
+        and args.scenario != "ProvidedFutureWeather"
+        and args.visualize_after_train
+    ):
         from tasks.single.visualization import visualize_checkpoint_predictions
 
         visualize_checkpoint_predictions(Path(args.run_dir), args.visualization_split, args.visualization_seed, args.visualization_device,)

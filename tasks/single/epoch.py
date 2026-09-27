@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
+from utils.amp import autocast_context
 from utils.acc30_loss import Acc30BoundaryLoss
 
 def run_epoch(model, loader, device, optimizer, objective, dbloss_weight, train, power_means, power_stds, show_progress, epoch, no_future_weather, model_uses_future_weather, weather_task,):
@@ -42,7 +43,7 @@ def run_epoch(model, loader, device, optimizer, objective, dbloss_weight, train,
             if train:
                 optimizer.zero_grad(set_to_none=True)
 
-            with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == "cuda",):
+            with autocast_context(device):
                 if model_uses_future_weather:
                     prediction = model(past, future_weather, turbine_id)
                 else:

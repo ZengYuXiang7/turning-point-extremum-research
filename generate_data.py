@@ -25,14 +25,32 @@ WORKER_COUNT = 8
 DEVICE_PATTERN = re.compile(r"广宁风电场(\d{2})号风机")
 IDENTITY_COLUMNS = ("场站", "设备名称", "时间")
 LABEL_COLUMN = "风机-P"
+REQUIRED_SOURCE_COLUMNS = (
+    "风机-理论功率-计算",
+    "风机-实时风速",
+    "风机-实时风向",
+    "风机-环境温度",
+    "机舱-舱内温度",
+    "塔筒-塔底温度",
+    "发电机-发电机转速",
+    "传动链-主轴转速",
+    "变桨轮毂-1#桨叶角度",
+    "变桨轮毂-2#桨叶角度",
+    "变桨轮毂-3#桨叶角度",
+    "偏航系统-对风角度",
+    "偏航系统-机舱位置",
+    "偏航系统-扭揽角度",
+    LABEL_COLUMN,
+)
 
 
-def collect_member_paths():
+def collect_member_paths(raw_root):
     # 按风机和文件名排序，给 raw 中每个日文件分配固定槽位。
-    member_paths = []
-    for member_path in RAW_ROOT.rglob("*.xls"):
-        member_paths.append(member_path)
-    member_paths.sort()
+    if not raw_root.is_dir():
+        raise FileNotFoundError(f"原始数据目录不存在: {raw_root}")
+    member_paths = sorted(raw_root.rglob("*.xls"))
+    if not member_paths:
+        raise FileNotFoundError(f"原始数据目录中没有 .xls 文件: {raw_root}")
     return member_paths
 
 
@@ -77,12 +95,22 @@ def convert_numeric_column(column_values):
     return numeric_values
 
 
-def scan_member(member_index, member_path, source_indices):
+def scan_member(member_index, member_path, source_indices, expected_headers):
     # 并行读取单个日文件的风机编号、原始行数和缺失列。
     workbook = xlrd.open_workbook(member_path, on_demand=True)
     sheet = workbook.sheet_by_index(0)
+    headers = tuple(str(value).strip() for value in sheet.row_values(0))
+    if headers != expected_headers:
+        workbook.release_resources()
+        raise ValueError(f"{member_path} 的列名或列顺序与首个文件不一致")
     turbine_match = DEVICE_PATTERN.search(member_path.name)
+    if turbine_match is None:
+        workbook.release_resources()
+        raise ValueError(f"无法从文件名识别风机编号: {member_path.name}")
     turbine_index = int(turbine_match.group(1)) - 1
+    if not 0 <= turbine_index < TURBINE_COUNT:
+        workbook.release_resources()
+        raise ValueError(f"风机编号必须为 01-{TURBINE_COUNT:02d}: {member_path.name}")
     raw_row_count = sheet.nrows - 1
     column_count = sheet.ncols
     missing_columns = np.zeros(len(source_indices), dtype=bool)
@@ -103,18 +131,20 @@ def scan_member(member_index, member_path, source_indices):
     )
 
 
-def build_slots(member_paths, source_indices, progress):
+def build_slots(member_paths, source_indices, expected_headers, progress, worker_count):
     # 并行统计每个日文件的原始行数，再分配不重叠槽位。
     member_count = len(member_paths)
     turbine_indices = np.empty(member_count, dtype=np.int64)
     row_counts = np.empty(member_count, dtype=np.int64)
     missing_columns = np.zeros(len(source_indices), dtype=bool)
 
-    with ProcessPoolExecutor(max_workers=WORKER_COUNT) as executor:
+    with ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = []
         for member_index in range(member_count):
             member_path = member_paths[member_index]
-            future = executor.submit(scan_member, member_index, member_path, source_indices,)
+            future = executor.submit(
+                scan_member, member_index, member_path, source_indices, expected_headers
+            )
             futures.append(future)
 
         for future in as_completed(futures):
@@ -123,7 +153,7 @@ def build_slots(member_paths, source_indices, progress):
             row_counts[member_index] = raw_row_count
             missing_columns |= member_missing
             member_path = member_paths[member_index]
-            display_member_path = member_path.relative_to(ROOT)
+            display_member_path = member_path
             print(f"[{member_index + 1}/{member_count}] {display_member_path}: " f"raw_shape=({raw_row_count}, {column_count}), " f"raw_points={raw_row_count}", flush=True,)
             progress.update(1)
 
@@ -133,6 +163,11 @@ def build_slots(member_paths, source_indices, progress):
         turbine_index = turbine_indices[member_index]
         slot_starts[member_index] = sequence_lengths[turbine_index]
         sequence_lengths[turbine_index] += row_counts[member_index]
+
+    missing_turbines = np.flatnonzero(sequence_lengths == 0) + 1
+    if len(missing_turbines):
+        missing_text = ", ".join(f"{value:02d}" for value in missing_turbines)
+        raise ValueError(f"缺少风机数据: {missing_text}")
 
     return turbine_indices, slot_starts, sequence_lengths, missing_columns
 
@@ -178,9 +213,9 @@ def write_member(member_index, member_path, source_indices, time_index, slot_sta
     return member_index
 
 
-def write_members(member_paths, source_indices, time_index, turbine_indices, slot_starts, data_paths, progress,):
+def write_members(member_paths, source_indices, time_index, turbine_indices, slot_starts, data_paths, progress, worker_count,):
     # 多进程写入不同槽位，任务完成先后不影响数组中的时间顺序。
-    with ProcessPoolExecutor(max_workers=WORKER_COUNT) as executor:
+    with ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = []
         for member_index in range(len(member_paths)):
             member_path = member_paths[member_index]
@@ -205,17 +240,30 @@ def sort_turbine_arrays(data_paths):
         data_array.flush()
 
 
-def create_building_root():
+def create_building_root(output_root):
     # 为本次构建创建独占的临时输出目录，避免并行运行互相删除文件。
-    building_root = Path(tempfile.mkdtemp(prefix=".processed_build_", dir=DATASET_ROOT))
+    output_root.parent.mkdir(parents=True, exist_ok=True)
+    building_root = Path(
+        tempfile.mkdtemp(prefix=f".{output_root.name}_build_", dir=output_root.parent)
+    )
     return building_root
 
 
-def publish_output(building_root):
+def publish_output(building_root, output_root):
     # 全部 NPY 完成后再整体替换旧 processed 目录。
-    if OUTPUT_ROOT.exists():
-        shutil.rmtree(OUTPUT_ROOT)
-    building_root.rename(OUTPUT_ROOT)
+    backup_root = output_root.with_name(f".{output_root.name}_previous")
+    if backup_root.exists():
+        shutil.rmtree(backup_root)
+    if output_root.exists():
+        output_root.rename(backup_root)
+    try:
+        building_root.rename(output_root)
+    except Exception:
+        if backup_root.exists() and not output_root.exists():
+            backup_root.rename(output_root)
+        raise
+    if backup_root.exists():
+        shutil.rmtree(backup_root)
 
 
 def save_feature_names(building_root, feature_names):
@@ -224,23 +272,40 @@ def save_feature_names(building_root, feature_names):
     columns_path.write_text(json.dumps(feature_names, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def main():
-    # 扫描原始记录，并行写入每台风机的10秒底层序列。
-    started = time.time()
-    building_root = create_building_root()
-    member_paths = collect_member_paths()
+def validate_required_columns(feature_names):
+    missing = [name for name in REQUIRED_SOURCE_COLUMNS if name not in feature_names]
+    if missing:
+        raise ValueError(f"模型所需列缺失或含空值: {missing}")
+
+
+def validate_output(data_paths):
+    # 联合面板需要16台风机拥有完全相同的时间轴。
+    reference = np.load(data_paths[0], mmap_mode="r")[:, 0]
+    if len(reference) == 0 or np.any(np.diff(reference) <= 0):
+        raise ValueError("风机01时间轴为空、重复或非递增")
+    for turbine_index in range(1, TURBINE_COUNT):
+        candidate = np.load(data_paths[turbine_index], mmap_mode="r")[:, 0]
+        if not np.array_equal(candidate, reference):
+            raise ValueError(
+                f"风机{turbine_index + 1:02d}与风机01的时间轴不一致"
+            )
+
+
+def build_dataset(raw_root, output_root, worker_count, building_root):
+    member_paths = collect_member_paths(raw_root)
     headers = collect_headers(member_paths[0])
     source_indices, feature_names = select_feature_columns(headers)
     time_index = headers.index("时间")
 
     progress = tqdm(total=2 * len(member_paths), desc=f"构建{BASE_INTERVAL_SECONDS}秒 NPY", unit="file",)
     turbine_indices, slot_starts, sequence_lengths, missing_columns = (
-        build_slots(member_paths, source_indices, progress,)
+        build_slots(member_paths, source_indices, tuple(headers), progress, worker_count)
     )
     source_indices = np.asarray(source_indices, dtype=np.int64)
     feature_names = np.asarray(feature_names)
     source_indices = source_indices[~missing_columns].tolist()
     feature_names = feature_names[~missing_columns].tolist()
+    validate_required_columns(feature_names)
 
     print("[0] Unix 秒级时间戳")
     for feature_index in range(len(feature_names)):
@@ -248,19 +313,40 @@ def main():
 
     data_paths = create_output_arrays(building_root, sequence_lengths, len(feature_names))
     save_feature_names(building_root, feature_names)
-    write_members(member_paths, source_indices, time_index, turbine_indices, slot_starts, data_paths, progress,)
+    write_members(member_paths, source_indices, time_index, turbine_indices, slot_starts, data_paths, progress, worker_count,)
     progress.close()
 
     sort_turbine_arrays(data_paths)
-    publish_output(building_root)
+    validate_output(data_paths)
+    publish_output(building_root, output_root)
+
+
+def main(raw_root=RAW_ROOT, output_root=OUTPUT_ROOT, worker_count=WORKER_COUNT):
+    # 扫描原始记录，并行写入每台风机的10秒底层序列。
+    started = time.time()
+    raw_root = Path(raw_root).expanduser().resolve()
+    output_root = Path(output_root).expanduser().resolve()
+    if worker_count < 1:
+        raise ValueError("worker_count 必须大于等于1")
+    building_root = create_building_root(output_root)
+    try:
+        build_dataset(raw_root, output_root, worker_count, building_root)
+    finally:
+        if building_root.exists():
+            shutil.rmtree(building_root)
+
     elapsed_seconds = time.time() - started
-    display_output_root = OUTPUT_ROOT.relative_to(ROOT)
-    print(f"完成: {display_output_root}，风机数={TURBINE_COUNT}，" f"底层间隔={BASE_INTERVAL_SECONDS}秒，矩阵维度={len(feature_names) + 1}，" f"耗时 {elapsed_seconds:.1f} 秒", flush=True,)
+    columns = json.loads((output_root / "columns.json").read_text(encoding="utf-8"))
+    print(f"完成: {output_root}，风机数={TURBINE_COUNT}，" f"底层间隔={BASE_INTERVAL_SECONDS}秒，矩阵维度={len(columns) + 1}，" f"耗时 {elapsed_seconds:.1f} 秒", flush=True,)
 
 
 if __name__ == "__main__":
-    # 数据固定构建为10秒底层序列，仅保留标准帮助入口。
-    argument_parser = argparse.ArgumentParser(description="从原始 XLS 构建固定10秒间隔的 processed NPY")
-    argument_parser.parse_args()
+    argument_parser = argparse.ArgumentParser(
+        description="从原始 XLS 构建固定10秒间隔的 processed NPY"
+    )
+    argument_parser.add_argument("--raw-root", type=Path, default=RAW_ROOT)
+    argument_parser.add_argument("--output-root", type=Path, default=OUTPUT_ROOT)
+    argument_parser.add_argument("--workers", type=int, default=WORKER_COUNT)
+    arguments = argument_parser.parse_args()
 
-    main()
+    main(arguments.raw_root, arguments.output_root, arguments.workers)

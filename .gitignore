@@ -42,6 +42,7 @@ output/
 *.pth
 *.ckpt
 *.onnx
+*.safetensors
 *.pkl
 *.pickle
 *.joblib

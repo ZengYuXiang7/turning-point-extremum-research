@@ -1,0 +1,97 @@
+{
+  "contract_version": "experiment-contract-v2",
+  "dataset": "GuangningWindPower15min",
+  "result_name": "lmt_TimeMoEARevIN_Guangning_Mac",
+  "model_name": "TimeMoEARevIN",
+  "purpose": "TimeMoE与Adaptive RevIN结合的多变量历史功率预测",
+  "condition": {
+    "domain": "wind_power_forecasting",
+    "scenario": "NoFutureWeather",
+    "base_interval_seconds": 10,
+    "point_interval_seconds": 900,
+    "history_steps": 16,
+    "horizon_steps": 1,
+    "window_stride_steps": 1,
+    "loss": "MSE",
+    "dbloss_weight": 0.5
+  },
+  "model_config": {
+    "input_features": 19,
+    "feature_fusion": "gated_numeric_embedding",
+    "moving_average_kernel": null,
+    "temporal_projection": "time_moe_last_token",
+    "turbine_embedding": true,
+    "turbine_embedding_relation": "none",
+    "embedding_relation_mix_initial": null,
+    "revin": true
+  },
+  "train_config": {
+    "seed": 2026,
+    "epochs": 3,
+    "patience": 3,
+    "batch_size": 8,
+    "learning_rate": 0.001,
+    "num_workers": 0,
+    "loss": "MSE",
+    "dbloss_weight": 0.5,
+    "selection_metric": "validation_strict_acc30"
+  },
+  "data_config": {
+    "source": "dataset/processed/turbine_01.npy ... turbine_16.npy",
+    "available_samples": 202496,
+    "split": "chronological_70_10_20",
+    "split_seeds": "none",
+    "train_samples": 141680,
+    "valid_samples": 20272,
+    "test_samples": 40544,
+    "features": "风机-理论功率-计算, 风机-实时风速, 风机-实时风向_sin, 风机-实时风向_cos, 风机-环境温度, 机舱-舱内温度, 塔筒-塔底温度, 发电机-发电机转速, 传动链-主轴转速, 变桨轮毂-1#桨叶角度, 变桨轮毂-2#桨叶角度, 变桨轮毂-3#桨叶角度, 偏航系统-对风角度_sin, 偏航系统-对风角度_cos, 偏航系统-机舱位置_sin, 偏航系统-机舱位置_cos, 偏航系统-扭揽角度_sin, 偏航系统-扭揽角度_cos, 风机-P",
+    "feature_normalization": "per_turbine_train_standard_scaler_then_window_revin",
+    "target": "风机-P",
+    "target_transform": "per_turbine_train_standard_scaler"
+  },
+  "mean_std": {
+    "Acc30": {
+      "mean": 62.47463663091639,
+      "std": 0.0
+    },
+    "MAE": {
+      "mean": 259.2496331695882,
+      "std": 0.0
+    },
+    "MAPE": {
+      "mean": 34.642674093768086,
+      "std": 0.0
+    },
+    "MSE": {
+      "mean": 230025.08286010465,
+      "std": 0.0
+    },
+    "RMSE": {
+      "mean": 479.609302307727,
+      "std": 0.0
+    }
+  },
+  "significance": [],
+  "rounds": [
+    {
+      "seed": 2026,
+      "best_epoch": 3,
+      "best_valid": {
+        "Acc30": 52.309418976085645,
+        "MSE_scaled": 0.09245092666865024
+      },
+      "test_metrics": {
+        "Acc30": 62.47463663091639,
+        "MAE": 259.2496331695882,
+        "MSE": 230025.08286010465,
+        "RMSE": 479.609302307727,
+        "MAPE": 34.642674093768086
+      },
+      "checkpoint": "checkpoints/GuangningWindPower15min/lmt_TimeMoEARevIN_Guangning_Mac/round_1.pt",
+      "early_stop": {
+        "patience": 3,
+        "completed_epochs": 3
+      }
+    }
+  ]
+}

@@ -73,7 +73,9 @@ def train_and_test(args) -> dict:
     if args.model in ("StockEcho", "MultiTurbine"):
         raise ValueError("StockEcho and MultiTurbine belong to the MultiTurbine task")
 
-    device = prepare_task_runtime(args.seed)
+    device = prepare_task_runtime(
+        args.seed, allow_mps=args.model == "TimeMoEARevIN"
+    )
     repository, datasets, loaders, model, model_uses_future_weather = (
         build_task_components(args, device, args.num_workers)
     )

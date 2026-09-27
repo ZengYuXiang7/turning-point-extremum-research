@@ -9,7 +9,7 @@ from utils.dbloss import DBLoss
 from utils.reproducibility import seed_everything
 
 
-def prepare_task_runtime(seed: int) -> torch.device:
+def prepare_task_runtime(seed: int, allow_mps: bool = False) -> torch.device:
     # Single 程序独立设置随机状态与计算精度。
     seed_everything(seed)
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -17,18 +17,22 @@ def prepare_task_runtime(seed: int) -> torch.device:
     torch.set_float32_matmul_precision("high")
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
+    elif allow_mps and torch.backends.mps.is_available():
+        device = torch.device("mps")
     else:
         device = torch.device("cpu")
     return device
 
 
 def compile_model(args, model):
-    # Qwen 与 Timer 保持原先不编译的执行策略。
+    # 预训练大模型保持不编译的执行策略。
     logging.getLogger("torch.fx.experimental.symbolic_shapes").setLevel(logging.ERROR)
     if args.model == "QwenMLP":
         compile_mode = "disabled_for_qwen_mlp"
     elif args.model == "TimerWeatherMLP":
         compile_mode = "disabled_for_timer_weather_mlp"
+    elif args.model == "TimeMoEARevIN":
+        compile_mode = "disabled_for_time_moe_arevin"
     else:
         model = torch.compile(model, mode="reduce-overhead")
         compile_mode = "reduce-overhead"
@@ -50,6 +54,8 @@ def build_optimization(args, model, device):
             trainable_parameters.append(parameter)
     if args.model == "TimerWeatherMLP":
         optimizer = torch.optim.AdamW(model.backbone.parameter_groups(adapter_lr=args.learning_rate, backbone_lr=args.timer_backbone_learning_rate,), weight_decay=1e-4,)
+    elif args.model == "TimeMoEARevIN":
+        optimizer = torch.optim.AdamW(model.backbone.parameter_groups(adapter_lr=args.learning_rate, backbone_lr=args.time_moe_backbone_learning_rate,), weight_decay=1e-4,)
     else:
         optimizer = torch.optim.Adam(trainable_parameters, lr=args.learning_rate)
 

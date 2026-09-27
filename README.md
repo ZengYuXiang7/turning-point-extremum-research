@@ -80,6 +80,31 @@ PYTHON=/home/xuke/.conda/envs/lzh_3090/bin/python GPU=0 \
   bash scripts/lzh/run_timer_weather_mlp.sh
 ```
 
+## TimeMoE + A-RevIN
+
+`models/single_impl/time_moe_arevin.py` 按 Single 任务统一接口实现
+`forward(past, turbine_id)`：历史特征先经 A-RevIN 归一化，再经门控数值
+嵌入和风机编号嵌入输入预训练 TimeMoE，最后直接输出多步功率并使用
+功率通道的 A-RevIN 统计量恢复尺度。输入特征数、功率列位置和风机数量均
+从 `Repository` 动态读取。
+
+模型目前仅支持 `NoFutureWeather`，且不使用 PatchMLP 专用的
+`--pretrain` 掩码重建阶段。TimeMoE-50M 权重默认位于
+`models/pretrained/TimeMoE-50M`，也可通过 `--time-moe-path` 指定其他本地目录。
+
+最小调用示例：
+
+```bash
+python run_single.py \
+  --model TimeMoEARevIN \
+  --scenario NoFutureWeather \
+  --loss MSE \
+  --point-interval-seconds 900 \
+  --history-steps 16 \
+  --horizon-steps 1 \
+  --time-moe-unfreeze-layers 0
+```
+
 当前默认实验为 `NoFutureWeather`：每个样本只输入预测起点之前的19维历史特征，
 不构造也不传入预测窗口内的12维未来协变量。`OracleFutureWeather` 与
 两阶段天气预测代码保留在工程中，但不作为当前实验入口。
@@ -106,7 +131,7 @@ PYTHON=/home/xuke/.conda/envs/lzh_3090/bin/python GPU=0 \
   24小时（96步）。其中 `horizon_steps=3` 即未来45分钟。
 - CLI `--history-steps`、`--horizon-steps` 和 `--window-stride-steps` 均使用模型点数，
   每点实际跨度由 `--point-interval-seconds` 决定。
-- 模型：PatchMLP、DLinear、StockEcho、MultiTurbine。
+- 模型：PatchMLP、DLinear、StockEcho、MultiTurbine、TimeMoEARevIN。
 - 气象口径：NoFutureWeather；历史中可使用已观测的气象和SCADA特征，预测窗口内不使用任何协变量。
 - 损失：MSE、DBLoss；StockEcho另包含MSEAcc30实验。
 - 随机种子：2026。
@@ -116,14 +141,66 @@ PYTHON=/home/xuke/.conda/envs/lzh_3090/bin/python GPU=0 \
 ## 数据划分
 
 - 按全部时间点的先后顺序划分：前70%训练、接着10%验证、最后20%测试。
-- 当前处理后数据的边界分别为 2026-08-01 09:30 和 2026-08-14 14:15。
+- 当前处理后数据的70%/80%原始时间边界分别为 2026-08-01 09:36
+  和 2026-08-14 14:24；模型窗口仍按各实验的整刻网格对齐。
 - 历史和目标窗口均不得跨越时间缺口。
 
-## 运行
+## Mac 本地运行 TimeMoE + A-RevIN
+
+本机可直接复用之前项目的 Conda 环境 `shantou-wind`。原始数据不需要复制进仓库，
+下面命令假设 `guangningshuju/` 与项目目录同级：
 
 ```bash
-cd /path/to/ElectricityForecasting
-uv run python generate_data.py
+cd /path/to/turning-point-extremum-research-main
+conda activate shantou-wind
+
+# GitHub 不提交 227 MB 预训练权重；新机器首次运行时下载一次
+python scripts/lmt/download_time_moe.py
+
+# 仅需执行一次；会生成 dataset/processed（约 7.7 GB）
+python generate_data.py --raw-root ../guangningshuju --workers 8
+
+# 先用一个真实窗口验证 TimeMoE+A-RevIN 前向、反向和优化器更新
+PYTORCH_ENABLE_MPS_FALLBACK=1 python scripts/lmt/smoke_time_moe_arevin.py
+
+# 按已验证参数正式训练：15分钟点，历史16点，预测1点
+PYTHON="$(which python)" MODE=train EPOCHS=3 PATIENCE=3 BATCH_SIZE=8 NUM_WORKERS=0 \
+  bash scripts/lmt/run_time_moe_arevin_mac.sh
+
+# 训练完成后评估 validation 最优检查点
+PYTHON="$(which python)" MODE=test BATCH_SIZE=8 NUM_WORKERS=0 \
+  bash scripts/lmt/run_time_moe_arevin_mac.sh
+```
+
+在其他机器上从 GitHub 重建环境时，建议使用本次已验证的 Python 3.11 创建 `.venv` 并执行
+`python -m pip install -r requirements.txt`。
+
+`generate_data.py` 会检查原始列、必需特征、16台风机以及全部时间轴，校验通过后才替换
+`dataset/processed/`。只有 `TimeMoEARevIN` 在 Apple Silicon 上会选择 MPS；其他原有模型的
+设备选择保持不变。MPS 不使用 CUDA bf16 autocast，遇到尚未支持的算子时由
+`PYTORCH_ENABLE_MPS_FALLBACK=1` 回退到 CPU。
+
+提交 GitHub 前先确认忽略规则生效：
+
+```bash
+git init
+git status --ignored --short
+git add .
+git status --short
+git commit -m "Add Guangning TimeMoE A-RevIN pipeline"
+git branch -M main
+git remote add origin <your-github-repository-url>
+git push -u origin main
+```
+
+`dataset/`、原始 Excel、检查点、运行产物和 `models/pretrained/` 均已忽略。
+TimeMoE 权重与官方自定义代码由上述下载脚本按固定版本重建，不会进入 Git。
+
+## 其他实验运行
+
+```bash
+cd /path/to/turning-point-extremum-research-main
+python generate_data.py --raw-root ../guangningshuju
 
 # DLinear训练
 bash "scripts/noweather/length_prediction/15min/dlinear_correlation_ablation_train.sh"
